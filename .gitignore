@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend (Phase 2)
+node_modules/
+dist/
+.dist/
+*.local
+*.tsbuildinfo
+
+# Claude Code local (machine-specific permissions/overrides)
+.claude/settings.local.json
+
+# Env / secrets
+.env
+.env.*
+*.tfvars
+!*.tfvars.example
+secrets/
+
+# Local-only docs
+DESIGN.md
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+.terraform.lock.hcl
+
+# Local data
+sample_export/
+*.zip
+out/
+*.snapshot.json
+# local dev copy of a real snapshot
+frontend/public/stats.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

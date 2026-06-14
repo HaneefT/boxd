@@ -1,0 +1,16 @@
+# Core pipeline (parser, stats, enricher, local_run) uses ONLY the Python
+# standard library — no install needed to run local_run.py against an export.
+#
+# We deliberately skip pandas (DESIGN suggested it): stdlib keeps the Lambda
+# deploy package small and avoids a binary-wheel layer. Revisit if stat
+# computation outgrows hand-rolled aggregation.
+#
+# The deps below are for the Phase 1 CLOUD wiring (the Lambda handler), added
+# once the Supabase project exists:
+
+# supabase>=2.4        # Postgres writes + Storage download (service_role)
+# boto3 is provided by the AWS Lambda runtime; pin only for local dev:
+# boto3>=1.34
+
+# Dev/test:
+# pytest>=8.0
