@@ -34,6 +34,7 @@ DESIGN.md
 *.tfstate.*
 crash.log
 .terraform.lock.hcl
+infra/build/
 
 # Local data
 sample_export/
