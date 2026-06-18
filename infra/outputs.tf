@@ -1,6 +1,6 @@
-output "upload_url" {
-  description = "POST the export ZIP here with an Authorization: Bearer <supabase access token>."
-  value       = "${aws_apigatewayv2_api.http.api_endpoint}/upload"
+output "process_url" {
+  description = "POST {\"path\":\"<uid>/export.zip\"} here (Authorization: Bearer <supabase token>) after uploading the ZIP to Storage."
+  value       = "${aws_apigatewayv2_api.http.api_endpoint}/process"
 }
 
 output "api_endpoint" {

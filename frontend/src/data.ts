@@ -1,11 +1,26 @@
 import type { Snapshot } from "./types";
+import { supabase, isSupabaseConfigured } from "./supabase";
 
-// Phase 2 dev: the precomputed snapshot is served as a static file from public/.
-// Later this becomes a fetch of the user's stat_snapshots.payload from Supabase.
-// Override with VITE_STATS_URL if you keep the file elsewhere.
+// Dev fallback: serve a static snapshot when Supabase isn't configured.
+// Set VITE_STATS_URL (defaults to /stats.json) and copy backend/out/stats.json
+// to frontend/public/stats.json.
 const STATS_URL = import.meta.env.VITE_STATS_URL ?? "/stats.json";
 
-export async function loadSnapshot(): Promise<Snapshot> {
+// Returns the signed-in user's precomputed stat snapshot, or null if they
+// haven't uploaded an export yet (prompt them to upload).
+export async function loadSnapshot(): Promise<Snapshot | null> {
+  if (!isSupabaseConfigured) return loadStaticSnapshot();
+
+  const { data, error } = await supabase
+    .from("stat_snapshots")
+    .select("payload")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data?.payload as Snapshot) ?? null;
+}
+
+async function loadStaticSnapshot(): Promise<Snapshot> {
   const res = await fetch(STATS_URL);
   if (!res.ok) {
     throw new Error(

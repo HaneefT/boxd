@@ -30,9 +30,9 @@ resource "aws_apigatewayv2_authorizer" "supabase_jwt" {
   }
 }
 
-resource "aws_apigatewayv2_route" "upload" {
+resource "aws_apigatewayv2_route" "process" {
   api_id             = aws_apigatewayv2_api.http.id
-  route_key          = "POST /upload"
+  route_key          = "POST /process"
   target             = "integrations/${aws_apigatewayv2_integration.upload.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.supabase_jwt.id

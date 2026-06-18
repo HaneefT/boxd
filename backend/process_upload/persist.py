@@ -11,6 +11,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from typing import Optional
 
 from .models import Profile, Watch, WatchlistEntry
@@ -116,6 +117,14 @@ class SupabaseWriter:
         self.replace_user_rows("watchlist", user_id, watchlist_rows(user_id, watchlist))
         self.replace_user_rows("unmatched", user_id, unmatched_rows(user_id, unmatched))
         self.upsert("stat_snapshots", [{"user_id": user_id, "payload": snapshot}])
+
+    def set_job(self, user_id: str, status: str, error: Optional[str] = None) -> None:
+        """Upsert the user's upload_jobs row so the SPA can poll progress."""
+        now = datetime.now(timezone.utc).isoformat()
+        self.upsert("upload_jobs", [{
+            "user_id": user_id, "status": status, "error": error,
+            "updated_at": now,
+        }])
 
     def replace_user_rows(self, table: str, user_id: str, rows: list[dict]) -> None:
         self._request("DELETE", f"/{table}?user_id=eq.{user_id}",

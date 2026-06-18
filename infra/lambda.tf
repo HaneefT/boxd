@@ -8,8 +8,12 @@ resource "null_resource" "lambda_build" {
       filesha1("${path.module}/../backend/process_upload/${f}")
     ]))
   }
+  # No quotes around the path: cmd /C on Windows mangles nested quotes. The
+  # script resolves its own paths via __file__, so working_dir just needs to
+  # locate it.
   provisioner "local-exec" {
-    command = "python \"${path.module}/build_lambda.py\""
+    command     = "python build_lambda.py"
+    working_dir = path.module
   }
 }
 
@@ -40,6 +44,21 @@ resource "aws_iam_role" "upload" {
 resource "aws_iam_role_policy_attachment" "upload_logs" {
   role       = aws_iam_role.upload.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Self-invoke: the dispatch path async-invokes this same function in worker mode.
+# ARN is built by name (not the resource attr) to avoid a role<->function cycle.
+resource "aws_iam_role_policy" "upload_self_invoke" {
+  name = "${local.name}-self-invoke"
+  role = aws_iam_role.upload.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "lambda:InvokeFunction"
+      Resource = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.name}-upload"
+    }]
+  })
 }
 
 # --- Function ----------------------------------------------------------------

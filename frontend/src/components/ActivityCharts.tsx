@@ -21,7 +21,9 @@ function MiniBars({ data, color }: { data: { name: string; count: number }[]; co
   );
 }
 
-export function ActivityCharts({ activity }: { activity: Activity }) {
+// Only needs the seasonality maps, so both the personal snapshot's Activity and
+// the group_stats activity rollup satisfy it.
+export function ActivityCharts({ activity }: { activity: Pick<Activity, "by_weekday" | "by_month"> }) {
   const weekday = WEEKDAYS.map((d) => ({ name: d, count: activity.by_weekday[d] ?? 0 }));
   const month = MONTHS.map((m) => ({ name: m, count: activity.by_month[m] ?? 0 }));
   return (

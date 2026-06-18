@@ -14,6 +14,9 @@ dist/
 .dist/
 *.local
 *.tsbuildinfo
+frontend/shots/
+test-results/
+shoot.mjs
 
 # Claude Code local (machine-specific permissions/overrides)
 .claude/settings.local.json
@@ -26,7 +29,7 @@ dist/
 secrets/
 
 # Local-only docs
-DESIGN.md
+*.md
 
 # Terraform
 .terraform/

@@ -24,6 +24,7 @@ resource "aws_cloudfront_distribution" "spa" {
   enabled             = true
   default_root_object = "index.html"
   comment             = "${local.name} SPA"
+  aliases             = [var.app_domain]
 
   origin {
     domain_name              = aws_s3_bucket.spa.bucket_regional_domain_name
@@ -37,6 +38,12 @@ resource "aws_cloudfront_distribution" "spa" {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
+
+    # Pre-launch gate (remove at launch — see gate.tf).
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.basic_auth.arn
+    }
   }
 
   # SPA client-side routing: hand unknown paths back to index.html.
@@ -58,7 +65,9 @@ resource "aws_cloudfront_distribution" "spa" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.app.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 }
 

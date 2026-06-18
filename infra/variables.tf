@@ -35,5 +35,27 @@ variable "tmdb_api_key" {
 variable "spa_cors_origins" {
   type        = list(string)
   description = "Allowed CORS origins for the upload API (the SPA's origins)."
-  default     = ["http://localhost:5173"]
+  default = [
+    "http://localhost:5173",
+    "https://boxd.haneeftaher.com",
+    "https://d3guxnyl53xxn0.cloudfront.net",
+  ]
+}
+
+variable "app_domain" {
+  type        = string
+  description = "Custom domain for the SPA (CloudFront alternate domain name)."
+  default     = "boxd.haneeftaher.com"
+}
+
+variable "basic_auth_user" {
+  type        = string
+  description = "Username for the pre-launch Basic Auth gate."
+  default     = "boxd"
+}
+
+variable "basic_auth_password" {
+  type        = string
+  description = "Password for the pre-launch Basic Auth gate."
+  sensitive   = true
 }

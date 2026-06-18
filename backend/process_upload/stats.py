@@ -207,17 +207,18 @@ def _enriched_stats(watches: list[Watch], films: dict[int, dict]) -> Optional[di
             if w.rating is not None:
                 director_ratings[d].append(w.rating)
 
-    # Harsh-critic comparison on a 5-star scale: your rating vs TMDB's
-    # vote_average rescaled from /10 to /5. One row per film so the lists
-    # aren't padded with repeat viewings.
+    # Harsh-critic comparison on a 5-star scale: your rating vs TMDB's community
+    # vote average, rescaled from TMDB's 0..10 to the 0..5 star scale you rate on.
+    # One row per film so the lists aren't padded with repeat viewings. Films
+    # without a TMDB vote (vote_average 0/None) drop out.
     deltas = []
     scored = []
     for w in unique:
         f = films[w.tmdb_id]
-        va = f.get("vote_average")
-        if w.rating is not None and va:
+        vote = f.get("vote_average")
+        community = vote / 2 if vote else None
+        if w.rating is not None and community is not None:
             you = w.rating
-            community = va / 2.0
             delta = you - community
             deltas.append(delta)
             scored.append({"title": w.title, "you": you,

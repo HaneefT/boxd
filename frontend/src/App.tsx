@@ -1,90 +1,86 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { loadSnapshot } from "./data";
 import type { Snapshot } from "./types";
-import { Section } from "./components/Section";
-import { Totals } from "./components/Totals";
-import { RatingHistogram } from "./components/RatingHistogram";
-import { GenreChart } from "./components/GenreChart";
-import { ActivityCharts } from "./components/ActivityCharts";
-import { Heatmap } from "./components/Heatmap";
-import { DirectorsTable } from "./components/DirectorsTable";
-import { VsCommunity } from "./components/VsCommunity";
-import { StatCard } from "./components/StatCard";
+import type { Group } from "./groups";
+import { isSupabaseConfigured, ownerEmail, supabase } from "./supabase";
+import { useSession } from "./useSession";
+import { Login } from "./components/Login";
+import { Invite } from "./components/Invite";
+import { InviteFriend } from "./components/InviteFriend";
+import { GroupSwitcher } from "./components/GroupSwitcher";
+import { GroupInvite } from "./components/GroupInvite";
+import { Upload } from "./components/Upload";
+import { Dashboard } from "./components/Dashboard";
 
 export function App() {
-  const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { session, loading: authLoading } = useSession();
+  const authed = !isSupabaseConfigured || session != null;
+  const params = new URLSearchParams(window.location.search);
+  const inviteToken = params.get("invite");
+  const groupInviteToken = params.get("group_invite");
+  const isOwner =
+    ownerEmail != null && session?.user.email?.toLowerCase() === ownerEmail;
 
-  useEffect(() => {
-    loadSnapshot().then(setSnap).catch((e) => setError(String(e.message ?? e)));
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
+
+  const reload = useCallback(() => {
+    setError(null);
+    setLoaded(false);
+    loadSnapshot()
+      .then(setSnap)
+      .catch((e) => setError(String(e.message ?? e)))
+      .finally(() => setLoaded(true));
   }, []);
 
-  if (error) return <div className="error">{error}</div>;
-  if (!snap) return <div className="loading">Loading stats…</div>;
+  useEffect(() => {
+    if (authed) reload();
+  }, [authed, reload]);
 
-  const { profile, core, enriched } = snap;
-  const era = core.era;
-  const big = core.activity.biggest_day;
+  // Drop the group_invite token from the URL once handled, so a refresh doesn't re-prompt.
+  const clearGroupInvite = () => {
+    window.history.replaceState(null, "", window.location.pathname);
+    reload();
+  };
+
+  if (isSupabaseConfigured && authLoading) return <div className="loading">…</div>;
+  if (isSupabaseConfigured && !session) {
+    if (inviteToken) return <Invite token={inviteToken} />;
+    if (groupInviteToken)
+      return <Login notice="Sign in to join the group you were invited to." />;
+    return <Login />;
+  }
+
+  // Signed in with a pending group invite: confirm + join before anything else.
+  if (groupInviteToken && session)
+    return <GroupInvite token={groupInviteToken} onDone={clearGroupInvite} />;
+
+  if (error) return <div className="error">{error}</div>;
+  if (!loaded) return <div className="loading">Loading stats…</div>;
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>{profile.username ?? "Your"} · Boxd Stats</h1>
-        <div className="sub">
-          {profile.date_joined && `On Letterboxd since ${profile.date_joined}. `}
-          {core.activity.first_logged && core.activity.last_logged && (
-            <>Logging from {core.activity.first_logged} to {core.activity.last_logged}.</>
-          )}
+      {isSupabaseConfigured && (
+        <div className="appbar">
+          <span className="who">{session?.user.email}</span>
+          <GroupSwitcher selected={group} onSelect={setGroup} />
+          {isOwner && <InviteFriend />}
+          <button className="secondary" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </button>
         </div>
-      </header>
+      )}
 
-      <Section title="Overview">
-        <Totals core={core} enriched={enriched} />
-      </Section>
-
-      <Section title="Ratings">
-        <RatingHistogram ratings={core.ratings} />
-      </Section>
-
-      <Section title="Activity">
-        <Heatmap activity={core.activity} />
-        <div style={{ height: 16 }} />
-        <ActivityCharts activity={core.activity} />
-        <div className="cards" style={{ marginTop: 16 }}>
-          <StatCard value={`${core.activity.longest_streak_days}d`} label="Longest streak" />
-          {big && <StatCard value={big.films} label="Biggest day" hint={big.date} />}
-          <StatCard
-            value={era.avg_film_age_at_watch != null ? `${era.avg_film_age_at_watch}y` : "—"}
-            label="Avg film age at watch"
-          />
-          <StatCard
-            value={era.oldest_year && era.newest_year ? `${era.oldest_year}–${era.newest_year}` : "—"}
-            label="Year range"
-          />
-        </div>
-      </Section>
-
-      {enriched ? (
-        <>
-          <Section title="Genres">
-            <GenreChart genres={enriched.genres} />
-          </Section>
-
-          <Section title="Directors">
-            <DirectorsTable directors={enriched.top_directors} />
-          </Section>
-
-          <Section title="You vs. the crowd">
-            <VsCommunity vs={enriched.vs_community} />
-          </Section>
-        </>
+      {snap ? (
+        <Dashboard snap={snap} group={group} myId={session?.user.id ?? null} />
       ) : (
-        <Section title="Enriched stats">
-          <div className="panel" style={{ color: "var(--muted)" }}>
-            No TMDB enrichment in this snapshot — run the pipeline with a TMDB key to see genres,
-            directors, runtime and community comparisons.
-          </div>
-        </Section>
+        <div className="empty">
+          <h1>Boxd Stats</h1>
+          <p className="sub">No stats yet — upload your Letterboxd export to get started.</p>
+          <Upload onComplete={reload} />
+        </div>
       )}
     </div>
   );

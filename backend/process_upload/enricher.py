@@ -64,7 +64,7 @@ class SupabaseFilmCache:
     invocation, which is all `enrich_watches` needs.
     """
 
-    # Columns mirror db/migrations/001_init.sql (minus enriched_at, server-set).
+    # Columns mirror db/migrations/001_init.sql (minus *_at, server-set).
     _COLS = ("tmdb_id", "title", "year", "runtime", "genres", "director",
              "country", "language", "popularity", "vote_average", "poster_path")
 
@@ -218,11 +218,16 @@ class TmdbClient:
 # Enrichment driver
 # ---------------------------------------------------------------------------
 
+def _film_id(name: Optional[str], year: Optional[int]) -> str:
+    # Stable film identity = normalised title + year (matches parser._film_key).
+    return f"nm:{(name or '').strip().lower()}|{year or ''}"
+
+
 def _film_key(w: Watch) -> str:
     # Group viewings of one film by (title, year) — the same basis TMDB matches
     # on — so each film is searched once. Letterboxd's per-viewing diary/review
     # URIs must not be used here (see parser._film_key).
-    return f"nm:{(w.title or '').strip().lower()}|{w.year or ''}"
+    return _film_id(w.title, w.year)
 
 
 def enrich_watches(

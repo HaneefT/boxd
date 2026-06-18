@@ -27,5 +27,7 @@ $env:TF_VAR_supabase_url              = $env:SUPABASE_URL
 $env:TF_VAR_supabase_jwt_issuer       = "$($env:SUPABASE_URL)/auth/v1"
 $env:TF_VAR_supabase_service_role_key = $env:SUPABASE_SERVICE_ROLE_KEY
 $env:TF_VAR_tmdb_api_key              = $env:TMDB_API_KEY
+$env:TF_VAR_basic_auth_user           = $env:BASIC_AUTH_USER
+$env:TF_VAR_basic_auth_password       = $env:BASIC_AUTH_PASSWORD
 
 terraform @TfArgs

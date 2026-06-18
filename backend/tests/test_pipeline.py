@@ -244,7 +244,8 @@ def test_run_pipeline_persists_rows():
 
     writer = CapturingWriter()
     result = run_pipeline(_make_export_zip(), "user-123",
-                          client=StubClient(), cache=InMemoryFilmCache(seed), writer=writer)
+                          client=StubClient(), cache=InMemoryFilmCache(seed),
+                          writer=writer)
 
     assert result == {"unique_films": 4, "total_logged": 5, "unmatched": 2}
 
@@ -259,6 +260,37 @@ def test_run_pipeline_persists_rows():
     # Re-upload safety: each user table is cleared before re-insert.
     seq = [(m, p) for (m, p, _) in writer.ops]
     assert seq.index(("DELETE", "/watches")) < seq.index(("POST", "/watches"))
+
+
+def test_vote_average_feeds_vs_community():
+    """TMDB's vote_average (0..10), rescaled to 0..5, drives the crowd comparison."""
+    from process_upload.enricher import InMemoryFilmCache, enrich_watches  # noqa: PLC0415
+    export = parser.parse_export(_make_export_zip())
+    watches = parser.build_watches(export)
+    seed = {
+        100: {"tmdb_id": 100, "title": "Heat", "year": 1995, "runtime": 170,
+              "genres": ["Crime"], "director": "Michael Mann",
+              "country": "United States", "language": "en", "vote_average": 7.9},
+        101: {"tmdb_id": 101, "title": "Sicario", "year": 2015, "runtime": 121,
+              "genres": ["Crime"], "director": "Denis Villeneuve",
+              "country": "United States", "language": "en", "vote_average": 7.6},
+    }
+    cache = InMemoryFilmCache(seed)
+
+    class StubClient:
+        def search_movie(self, title, _year):
+            return {"Heat": 100, "Sicario": 101}.get(title)
+        def movie_details(self, tmdb_id):
+            return seed[tmdb_id]
+
+    films, _ = enrich_watches(watches, StubClient(), cache)
+    vs = stats.compute_snapshot(watches, films=films)["enriched"]["vs_community"]
+
+    # Sicario: you 5.0 vs 7.6/2 = 3.8 -> Δ +1.2, the biggest positive delta.
+    assert vs["you_overrate"][0]["title"] == "Sicario"
+    assert vs["you_overrate"][0]["community"] == 3.8
+    # Heat's representative viewing is rated 4.5 vs 7.9/2 = 3.95 -> Δ +0.55.
+    assert {r["title"] for r in vs["you_overrate"]} == {"Heat", "Sicario"}
 
 
 def _run_all():
