@@ -28,6 +28,9 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
+  // Re-upload a fresh export to recompute the snapshot (DESIGN §2.4 — "fresh stats =
+  // re-upload"). The raw ZIP is deleted after parsing, so there's nothing to reprocess.
+  const [reuploading, setReuploading] = useState(false);
   // A fresh token from the URL, or one stashed before a sign-in redirect (which
   // strips the query string). Resolved once into state; the stash is dropped as
   // soon as it's consumed (below) or on done.
@@ -107,6 +110,11 @@ export function App() {
           <span className="who">{session?.user.email}</span>
           <GroupSwitcher selected={group} onSelect={setGroup} />
           {isOwner && <InviteFriend />}
+          {snap && (
+            <button className="secondary" onClick={() => setReuploading((r) => !r)}>
+              Refresh stats
+            </button>
+          )}
           {session && <AccountMenu session={session} />}
         </div>
       )}
@@ -126,7 +134,27 @@ export function App() {
       )}
 
       {snap ? (
-        <Dashboard snap={snap} group={group} myId={session?.user.id ?? null} />
+        <>
+          {reuploading && (
+            <div className="panel notice" style={{ marginBottom: 16 }}>
+              <div className="group-head">
+                <span className="sub">
+                  Download a fresh export from Letterboxd and upload it to recompute your stats.
+                </span>
+                <button className="secondary" onClick={() => setReuploading(false)}>
+                  Cancel
+                </button>
+              </div>
+              <Upload
+                onComplete={() => {
+                  setReuploading(false);
+                  reload();
+                }}
+              />
+            </div>
+          )}
+          <Dashboard snap={snap} group={group} myId={session?.user.id ?? null} />
+        </>
       ) : (
         <div className="empty">
           <h1>Boxd Stats</h1>

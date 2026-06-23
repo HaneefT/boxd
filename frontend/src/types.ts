@@ -6,6 +6,9 @@ export interface Snapshot {
   profile: Profile;
   core: Core;
   enriched: Enriched | null;
+  // TMDB watchlist stats — its own section so it survives a snapshot with no matched
+  // diary watch (the enriched section is null then). Absent on pre-actuary snapshots.
+  watchlist_enriched?: EnrichedWatchlist | null;
 }
 
 export interface Profile {
@@ -70,6 +73,45 @@ export interface Watchlist {
   oldest_year: number | null;
   first_added: string | null;
   last_added: string | null;
+  // Actuary fields — absent on snapshots computed before the watchlist actuary.
+  stale_count?: number;
+  velocity?: WatchlistVelocity | null;
+  backlog?: WatchlistBacklog | null;
+}
+
+export interface WatchlistVelocity {
+  added_per_month: number;
+  watched_per_month: number;
+  net_per_month: number;
+  months_to_clear: number | null; // null = list grows at least as fast as you clear it
+  projected_clear: string | null; // "YYYY-MM", or null when never
+}
+
+export interface WatchlistBacklog {
+  oldest: { title: string; added_at: string; years_ago: number } | null;
+  avg_age_days: number | null;
+}
+
+export interface WatchlistRuntime {
+  matched: number; // of count, how many watchlist films had a runtime estimate
+  total_minutes: number;
+  total_hours: number;
+  total_days: number;
+}
+
+// TMDB-derived watchlist stats (Snapshot.watchlist_enriched). Needs the watchlist's
+// films matched + their runtimes/genres; absent on un-enriched snapshots.
+export interface EnrichedWatchlist {
+  runtime: WatchlistRuntime | null;
+  shortest: { title: string; runtime: number }[]; // quick wins, shortest first
+  longest: { title: string; runtime: number } | null; // longest commitment
+  taste_gap: { over: TasteGapGenre[] } | null;
+}
+
+export interface TasteGapGenre {
+  genre: string;
+  index: number | null; // watchlist share ÷ watched share; null = never watched
+  watchlist_count: number;
 }
 
 export interface Enriched {
@@ -80,6 +122,8 @@ export interface Enriched {
   countries: Record<string, number>;
   languages: Record<string, number>;
   top_directors: { director: string; films: number; avg_rating: number | null }[];
+  top_actors: { actor: string; films: number; avg_rating: number | null }[];
+  unique_actors: number;
   vs_community: VsCommunity;
 }
 

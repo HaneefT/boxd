@@ -89,8 +89,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"\r  enriching {i}/{n} films ...", end="", flush=True)
 
         print("Enriching via TMDB ...")
-        films, unmatched = enricher.enrich_watches(watches, client, cache, _progress)
+        resolved: dict = {}
+        films, unmatched = enricher.enrich_watches(watches, client, cache, _progress, resolved=resolved)
         print(f"\n  matched {len(films)} films; {len(unmatched)} unmatched")
+        # Enrich the watchlist on the same pass (shared search memo) so the actuary's
+        # runtime-to-clear has film runtimes. Skipped under --limit (debug) to keep
+        # the run fast — that path only samples the diary anyway.
+        if not args.limit and export.watchlist:
+            print(f"Enriching watchlist ({len(export.watchlist)} entries) ...")
+            enricher.enrich_watchlist(export.watchlist, client, cache,
+                                      resolved=resolved, films_used=films)
     else:
         print("Skipping TMDB enrichment (no --tmdb-key); core stats only.")
 

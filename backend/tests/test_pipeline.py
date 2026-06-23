@@ -365,6 +365,158 @@ def test_movie_details_extracts_top_cast():
     assert film["top_cast"] == [f"Actor {i}" for i in range(TMDB_CAST_N)]  # billing order, capped
 
 
+def test_enriched_actor_leaderboard():
+    """top_cast fans out to a per-actor leaderboard: films-watched count (per unique
+    film) ranks them, avg ★ is over the films of theirs you rated."""
+    from process_upload.enricher import InMemoryFilmCache, enrich_watches  # noqa: PLC0415
+    export = parser.parse_export(_make_export_zip())
+    watches = parser.build_watches(export)
+    # Heat is rated (4.5 on its representative viewing), Sicario 5.0. Pacino is in
+    # both -> 2 films; De Niro only in Heat -> 1 film.
+    seed = {
+        100: {"tmdb_id": 100, "title": "Heat", "year": 1995, "vote_average": 7.9,
+              "top_cast": ["Al Pacino", "Robert De Niro"]},
+        101: {"tmdb_id": 101, "title": "Sicario", "year": 2015, "vote_average": 7.6,
+              "top_cast": ["Emily Blunt", "Al Pacino"]},
+    }
+    cache = InMemoryFilmCache(seed)
+
+    class StubClient:
+        def search_movie(self, title, _year):
+            return {"Heat": 100, "Sicario": 101}.get(title)
+        def movie_details(self, tmdb_id):
+            return seed[tmdb_id]
+
+    films, _ = enrich_watches(watches, StubClient(), cache)
+    enriched = stats.compute_snapshot(watches, films=films)["enriched"]
+    actors = {a["actor"]: a for a in enriched["top_actors"]}
+
+    assert enriched["top_actors"][0]["actor"] == "Al Pacino"  # 2 films -> ranked first
+    assert actors["Al Pacino"]["films"] == 2
+    assert actors["Robert De Niro"]["films"] == 1
+    assert enriched["unique_actors"] == 3
+    # Pacino's avg ★ spans both rated films: (4.5 + 5.0) / 2 = 4.75.
+    assert actors["Al Pacino"]["avg_rating"] == 4.75
+
+
+def test_watchlist_actuary_runtime_and_velocity():
+    """Watchlist actuary: runtime-to-clear (enriched, summed from watchlist tmdb_id)
+    plus a CSV-only velocity that projects a finite clear date when you watch faster
+    than you add, and counts long-stale items."""
+    import re  # noqa: PLC0415
+    from datetime import date, timedelta  # noqa: PLC0415
+    from process_upload.models import Watch, WatchlistEntry  # noqa: PLC0415
+
+    films = {
+        100: {"tmdb_id": 100, "title": "Heat", "year": 1995, "runtime": 180, "vote_average": 7.9},
+        101: {"tmdb_id": 101, "title": "Sicario", "year": 2015, "runtime": 120, "vote_average": 7.6},
+        200: {"tmdb_id": 200, "title": "Tenet", "year": 2020, "vote_average": 7.3},  # no runtime
+    }
+    # 10 diary watches of one matched film over 90 days -> a brisk watch rate, and a
+    # non-empty `matched` so the enriched section (with watchlist_runtime) is built.
+    base = date(2024, 1, 1)
+    watches = [Watch("Heat", 1995, f"u/h{i}", base + timedelta(days=i * 10), 4.0, tmdb_id=100)
+               for i in range(10)]
+    # All added 2010-2014 -> all stale whenever the test runs; a low add rate vs the
+    # brisk watch rate above keeps net positive, so the clear date is finite.
+    watchlist = [
+        WatchlistEntry("Heat", 1995, "u/wh", date(2010, 1, 1), tmdb_id=100),
+        WatchlistEntry("Sicario", 2015, "u/ws", date(2012, 1, 1), tmdb_id=101),
+        WatchlistEntry("Tenet", 2020, "u/wt", date(2014, 1, 1), tmdb_id=200),
+    ]
+
+    snap = stats.compute_snapshot(watches, films=films, watchlist=watchlist)
+    wl = snap["core"]["watchlist"]
+    ewl = snap["watchlist_enriched"]
+
+    # Runtime to clear sums only the two watchlist films that have a runtime.
+    assert ewl["runtime"] == {
+        "matched": 2, "total_minutes": 300, "total_hours": 5.0, "total_days": 0.2,
+    }
+    # Quick wins shortest-first; the longest is the single biggest commitment.
+    assert [s["title"] for s in ewl["shortest"]] == ["Sicario", "Heat"]  # 120 then 180
+    assert ewl["longest"] == {"title": "Heat", "runtime": 180}
+    # Regression: the enriched-watchlist work must not clobber the DIARY longest/
+    # shortest-film-sat-through (they're computed in a separate function now).
+    assert snap["enriched"]["runtime"]["longest"] == {"minutes": 180, "title": "Heat"}
+    assert snap["enriched"]["runtime"]["shortest"] == {"minutes": 180, "title": "Heat"}
+    assert wl["stale_count"] == 3
+    # Backlog: oldest add is the 2010 Heat entry.
+    assert wl["backlog"]["oldest"]["title"] == "Heat"
+    assert wl["backlog"]["oldest"]["added_at"] == "2010-01-01"
+    v = wl["velocity"]
+    assert v["watched_per_month"] > v["added_per_month"]   # watch faster than you add
+    assert v["net_per_month"] > 0 and v["months_to_clear"] is not None
+    assert re.fullmatch(r"\d{4}-\d{2}", v["projected_clear"])
+
+
+def test_watchlist_enriched_survives_no_matched_diary():
+    """Watchlist runtime/quick-wins come from the watchlist's OWN matched films, so
+    they're present even when no diary watch matched TMDB (enriched is None). The
+    taste gap needs watched genres, so it falls back to null."""
+    from datetime import date  # noqa: PLC0415
+    from process_upload.models import Watch, WatchlistEntry  # noqa: PLC0415
+
+    films = {
+        100: {"tmdb_id": 100, "title": "Heat", "year": 1995, "runtime": 170, "genres": ["Crime"]},
+        101: {"tmdb_id": 101, "title": "Sicario", "year": 2015, "runtime": 121, "genres": ["Crime"]},
+    }
+    # A diary watch that TMDB never matched (tmdb_id None) -> enriched is None.
+    watches = [Watch("Some Obscure Film", 1980, "u/x", date(2024, 1, 1), 4.0, tmdb_id=None)]
+    watchlist = [
+        WatchlistEntry("Heat", 1995, "u/wh", date(2020, 1, 1), tmdb_id=100),
+        WatchlistEntry("Sicario", 2015, "u/ws", date(2021, 1, 1), tmdb_id=101),
+    ]
+
+    snap = stats.compute_snapshot(watches, films=films, watchlist=watchlist)
+    assert snap["enriched"] is None                       # no matched diary
+    ewl = snap["watchlist_enriched"]
+    assert ewl is not None                                # ...but the watchlist survives
+    assert ewl["runtime"]["matched"] == 2
+    assert ewl["runtime"]["total_minutes"] == 291
+    assert ewl["longest"] == {"title": "Heat", "runtime": 170}
+    assert ewl["taste_gap"] is None                       # nothing watched to compare
+
+
+def test_watchlist_taste_gap():
+    """The taste gap surfaces genres the watchlist over-indexes on vs actual viewing,
+    never-watched genres first, dropping thinly-represented ones."""
+    from collections import Counter  # noqa: PLC0415
+    from process_upload.stats import _watchlist_taste_gap  # noqa: PLC0415
+
+    # Watchlist: Documentary hoarded (you watch few), Western never watched, Drama in
+    # line, Mystery too thin (2) to count.
+    wl = Counter({"Documentary": 8, "Western": 5, "Drama": 6, "Mystery": 2})
+    watched = Counter({"Drama": 40, "Documentary": 4, "Comedy": 30})
+
+    gap = _watchlist_taste_gap(wl, watched)
+    genres = [r["genre"] for r in gap["over"]]
+    assert genres[0] == "Western"                 # never watched -> ranked first
+    assert "Documentary" in genres                # over-indexed
+    assert "Mystery" not in genres                # below the count>=3 floor
+    western = next(r for r in gap["over"] if r["genre"] == "Western")
+    assert western["index"] is None               # None = a genre you never watch
+
+
+def test_watchlist_velocity_never_clears():
+    """When you add at least as fast as you watch, there's no finite clear date."""
+    from datetime import date, timedelta  # noqa: PLC0415
+    from process_upload.models import Watch, WatchlistEntry  # noqa: PLC0415
+
+    base = date(2023, 1, 1)
+    # 3 watches over 300 days (slow) vs 12 watchlist adds over 60 days (fast).
+    watches = [Watch("Heat", 1995, f"u/h{i}", base + timedelta(days=i * 150), 4.0)
+               for i in range(3)]
+    watchlist = [WatchlistEntry(f"Film {i}", 2000, f"u/w{i}", base + timedelta(days=i * 5))
+                 for i in range(12)]
+
+    wl = stats.compute_snapshot(watches, watchlist=watchlist)["core"]["watchlist"]
+    v = wl["velocity"]
+    assert v["added_per_month"] > v["watched_per_month"]
+    assert v["net_per_month"] < 0
+    assert v["months_to_clear"] is None and v["projected_clear"] is None
+
+
 def _run_all():
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

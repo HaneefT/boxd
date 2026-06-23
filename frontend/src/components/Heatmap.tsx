@@ -8,11 +8,6 @@ const DOW = ["Mon", "", "Wed", "", "Fri", "", ""];
 // the panel (--bg-elev #1c2228) so every day is visible as a grid cell, GitHub-style.
 const SHADES = ["#2a323b", "#0e4d1a", "#15732a", "#1f9c39", "#2dd257"];
 
-// Parse "YYYY-MM-DD" as a UTC date (avoids local-timezone day drift).
-function utc(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
 function addDays(d: Date, n: number): Date {
   return new Date(d.getTime() + n * 86400000);
 }
@@ -20,8 +15,6 @@ function addDays(d: Date, n: number): Date {
 function dowMon(d: Date): number {
   return (d.getUTCDay() + 6) % 7;
 }
-
-type YearFilter = "all" | number;
 
 export function Heatmap({ activity }: { activity: Activity }) {
   // Years present in the data, newest first — drives the GitHub-style filter row.
@@ -31,12 +24,13 @@ export function Heatmap({ activity }: { activity: Activity }) {
     return [...ys].sort((a, b) => b - a);
   }, [activity]);
 
-  const [year, setYear] = useState<YearFilter>("all");
-  // If the snapshot changes and the selected year disappears, fall back to all.
-  const activeYear: YearFilter = year !== "all" && !years.includes(year) ? "all" : year;
+  // One year at a time (GitHub-style), defaulting to the most recent. If the snapshot
+  // changes and the selected year disappears, fall back to the newest.
+  const [year, setYear] = useState<number>(years[0]);
+  const activeYear = years.includes(year) ? year : years[0];
 
   // Measure the grid's available width so cells can grow to fill it (no dead gap
-  // before the year column) for narrow ranges, while the wide "All" view scrolls.
+  // before the year column).
   const wrapRef = useRef<HTMLDivElement>(null);
   const [availWidth, setAvailWidth] = useState(0);
   useEffect(() => {
@@ -51,24 +45,14 @@ export function Heatmap({ activity }: { activity: Activity }) {
     const entries = Object.entries(activity.heatmap);
     if (entries.length === 0) return { columns: [], max: 0, monthLabels: [] };
 
-    const dates = entries.map(([k]) => k).sort();
-    const firstDate = utc(dates[0]);
-    const lastDate = utc(dates[dates.length - 1]);
     // All-time max so shading stays comparable across years, not rescaled per view.
     const maxCount = Math.max(...entries.map(([, v]) => v));
 
-    let start: Date;
-    let end: Date;
-    if (activeYear === "all") {
-      start = addDays(firstDate, -dowMon(firstDate)); // back to Monday
-      end = lastDate;
-    } else {
-      const jan1 = new Date(Date.UTC(activeYear, 0, 1));
-      start = addDays(jan1, -dowMon(jan1));
-      // Always a full Jan–Dec grid so every year looks identical; the current
-      // year's not-yet-happened days just render blank (no data = empty square).
-      end = new Date(Date.UTC(activeYear, 11, 31));
-    }
+    // A full Jan–Dec grid for the selected year, so every year looks identical; the
+    // current year's not-yet-happened days just render blank (no data = empty square).
+    const jan1 = new Date(Date.UTC(activeYear, 0, 1));
+    const start = addDays(jan1, -dowMon(jan1)); // back to Monday
+    const end = new Date(Date.UTC(activeYear, 11, 31));
 
     const cols: { date: Date; count: number }[][] = [];
     const labels: { col: number; text: string }[] = [];
@@ -78,9 +62,9 @@ export function Heatmap({ activity }: { activity: Activity }) {
       const week: { date: Date; count: number }[] = [];
       for (let r = 0; r < 7; r++) {
         const key = cur.toISOString().slice(0, 10);
-        // A single-year view's edge weeks spill into the adjacent year; blank those
-        // days (and skip their labels) so each year shows strictly its own data.
-        const inYear = activeYear === "all" || cur.getUTCFullYear() === activeYear;
+        // Edge weeks spill into the adjacent year; blank those days (and skip their
+        // labels) so the grid shows strictly the selected year's data.
+        const inYear = cur.getUTCFullYear() === activeYear;
         week.push({ date: cur, count: inYear ? activity.heatmap[key] ?? 0 : 0 });
         // Label a month above the week that contains its 1st. Anchoring to the 1st
         // (not "the month changed") avoids a leading partial-month stub — e.g. the
@@ -104,8 +88,8 @@ export function Heatmap({ activity }: { activity: Activity }) {
     return SHADES[idx];
   };
 
-  // Grow cells to fill the measured width (no dead gap) for narrow ranges; for the
-  // wide multi-year "All" view the fit shrinks below CELL, so keep CELL and scroll.
+  // Grow cells to fill the measured width (no dead gap); a single year is ~53
+  // columns, so they widen up to a cap. The scroll fallback stays for narrow widths.
   const LABEL_W = 30;
   let cell = CELL;
   if (availWidth > 0) {
@@ -159,12 +143,6 @@ export function Heatmap({ activity }: { activity: Activity }) {
         </div>
         {years.length > 1 && (
           <div className="heatmap-years">
-            <button
-              className={activeYear === "all" ? "" : "secondary"}
-              onClick={() => setYear("all")}
-            >
-              All
-            </button>
             {years.map((y) => (
               <button
                 key={y}

@@ -7,10 +7,13 @@ import { GroupMembers } from "./components/GroupMembers";
 import { GroupComparisonTable } from "./components/GroupComparisonTable";
 import { GenreChart } from "./components/GenreChart";
 import { DirectorsTable } from "./components/DirectorsTable";
+import { PeopleTable } from "./components/PeopleTable";
+import { WatchlistActuary } from "./components/WatchlistActuary";
+import { Wrapped } from "./components/Wrapped";
 import { ActivityCharts } from "./components/ActivityCharts";
 import { Heatmap } from "./components/Heatmap";
 import { Section } from "./components/Section";
-import type { Activity } from "./types";
+import type { Activity, Core, Enriched, EnrichedWatchlist, Profile, Watchlist } from "./types";
 import { StatCard } from "./components/StatCard";
 import type { FilmComparison, Group, GroupStats, RosterMember } from "./groups";
 
@@ -79,6 +82,66 @@ const MOCK_SESSION = {
   user: { email: "you@example.com", user_metadata: {}, app_metadata: { provider: "email" } },
 } as unknown as Session;
 
+// Watchlist actuary — the "never" case (adding faster than watching), the most
+// interesting layout: months_to_clear/projected_clear null + the growing-faster note.
+const MOCK_WATCHLIST: Watchlist = {
+  count: 487,
+  avg_year: 2009,
+  oldest_year: 1931,
+  first_added: "2017-03-01",
+  last_added: "2025-06-01",
+  stale_count: 96,
+  velocity: {
+    added_per_month: 7.4,
+    watched_per_month: 5.1,
+    net_per_month: -2.3,
+    months_to_clear: null,
+    projected_clear: null,
+  },
+  backlog: {
+    oldest: { title: "Stalker", added_at: "2018-02-11", years_ago: 7.4 },
+    avg_age_days: 612,
+  },
+};
+const MOCK_ENRICHED_WL: EnrichedWatchlist = {
+  runtime: { matched: 472, total_minutes: 54360, total_hours: 906, total_days: 37.8 },
+  shortest: [
+    { title: "Aftersun", runtime: 102 },
+    { title: "Past Lives", runtime: 105 },
+    { title: "Frances Ha", runtime: 86 },
+  ],
+  longest: { title: "Sátántangó", runtime: 439 },
+  taste_gap: {
+    over: [
+      { genre: "Western", index: null, watchlist_count: 11 },
+      { genre: "Documentary", index: 3.1, watchlist_count: 64 },
+      { genre: "War", index: 1.8, watchlist_count: 22 },
+    ],
+  },
+};
+
+// Wrapped card reads only activity.by_year + enriched.genre_by_year + profile.username.
+const MOCK_WRAPPED_CORE = {
+  activity: { by_year: { 2021: 142, 2022: 205, 2023: 188, 2024: 261, 2025: 97 } },
+} as unknown as Core;
+const MOCK_WRAPPED_ENRICHED = {
+  genre_by_year: {
+    "2024": { Drama: 60, Action: 44, Thriller: 30, Comedy: 22 },
+    "2025": { Horror: 18, Drama: 12, Comedy: 9 },
+    "2022": { Comedy: 50, Drama: 40 },
+  },
+} as unknown as Enriched;
+const MOCK_WRAPPED_PROFILE: Profile = { username: "artemis24", date_joined: null, favorite_films: [] };
+
+// Actor leaderboard (solo "People" view) — some with no rated films (avg ★ = —).
+const MOCK_ACTORS = [
+  { actor: "Toni Collette", films: 11, avg_rating: 4.2 },
+  { actor: "Oscar Isaac", films: 9, avg_rating: 4.0 },
+  { actor: "Tilda Swinton", films: 8, avg_rating: 4.4 },
+  { actor: "Michael Fassbender", films: 7, avg_rating: 3.8 },
+  { actor: "Florence Pugh", films: 6, avg_rating: null },
+];
+
 // Multi-year heatmap with DIFFERENT density per year, so the year filter is
 // visibly distinct (2024 sparse/faint, 2025 dense/varied).
 const MOCK_ACTIVITY = {
@@ -113,6 +176,10 @@ export function Harness() {
         <AccountMenu session={MOCK_SESSION} />
       </div>
 
+      <Section title="Your year, wrapped">
+        <Wrapped core={MOCK_WRAPPED_CORE} enriched={MOCK_WRAPPED_ENRICHED} profile={MOCK_WRAPPED_PROFILE} />
+      </Section>
+
       <Section title="Activity (heatmap + year filter)">
         <Heatmap activity={MOCK_ACTIVITY} />
       </Section>
@@ -142,13 +209,24 @@ export function Harness() {
       </div>
 
       <h2 style={{ marginTop: 40 }}>Harness — where you differ</h2>
-      <GroupComparisonTable films={MOCK_FILMS} />
+      <div id="cmp">
+        <GroupComparisonTable films={MOCK_FILMS} />
+      </div>
 
       <Section title="Group genres">
         <GenreChart genres={MOCK_STATS.genres} />
       </Section>
       <Section title="Group directors">
         <DirectorsTable directors={MOCK_STATS.directors} />
+      </Section>
+      <Section title="People (solo actor leaderboard)">
+        <div className="cards" style={{ marginBottom: 16 }}>
+          <StatCard value={128} label="Unique actors" />
+        </div>
+        <PeopleTable actors={MOCK_ACTORS} />
+      </Section>
+      <Section title="Watchlist actuary (never-clears case)">
+        <WatchlistActuary watchlist={MOCK_WATCHLIST} enriched={MOCK_ENRICHED_WL} />
       </Section>
       <Section title="Group activity">
         <ActivityCharts activity={MOCK_STATS.activity} />

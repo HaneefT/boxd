@@ -115,15 +115,33 @@ export function GroupView({ group, myId }: { group: Group; myId: string }) {
       </Section>
 
       <Section title="Group genres">
-        <GenreChart genres={stats.genres} />
+        {Object.keys(stats.genres).length > 0 ? (
+          <GenreChart genres={stats.genres} />
+        ) : (
+          <div className="panel" style={{ color: "var(--muted)" }}>
+            No enriched films in the group yet.
+          </div>
+        )}
       </Section>
 
       <Section title="Group directors">
-        <DirectorsTable directors={stats.directors} />
+        {stats.directors.length > 0 ? (
+          <DirectorsTable directors={stats.directors} />
+        ) : (
+          <div className="panel" style={{ color: "var(--muted)" }}>
+            No director data yet — members' films need TMDB enrichment first.
+          </div>
+        )}
       </Section>
 
       <Section title="Group activity">
-        <ActivityCharts activity={stats.activity} />
+        {Object.keys(stats.activity.by_year).length > 0 ? (
+          <ActivityCharts activity={stats.activity} />
+        ) : (
+          <div className="panel" style={{ color: "var(--muted)" }}>
+            No dated viewing logged across the group yet.
+          </div>
+        )}
       </Section>
     </>
   );

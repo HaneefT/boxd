@@ -6,7 +6,10 @@ import { RatingHistogram } from "./RatingHistogram";
 import { GenreChart } from "./GenreChart";
 import { ActivityCharts } from "./ActivityCharts";
 import { Heatmap } from "./Heatmap";
+import { Wrapped, completedYears } from "./Wrapped";
 import { DirectorsTable } from "./DirectorsTable";
+import { PeopleTable } from "./PeopleTable";
+import { WatchlistActuary } from "./WatchlistActuary";
 import { VsCommunity } from "./VsCommunity";
 import { GroupView } from "./GroupView";
 import { StatCard } from "./StatCard";
@@ -45,6 +48,12 @@ export function Dashboard({
         <Totals core={core} enriched={enriched} />
       </Section>
 
+      {completedYears(core.activity.by_year).length > 0 && (
+        <Section title="Your year, wrapped">
+          <Wrapped core={core} enriched={enriched} profile={profile} />
+        </Section>
+      )}
+
       <Section title="Ratings">
         <RatingHistogram ratings={core.ratings} />
       </Section>
@@ -67,6 +76,15 @@ export function Dashboard({
         </div>
       </Section>
 
+      {core.watchlist.count > 0 && (
+        <Section title="Watchlist">
+          <WatchlistActuary
+            watchlist={core.watchlist}
+            enriched={snap.watchlist_enriched ?? null}
+          />
+        </Section>
+      )}
+
       {enriched ? (
         <>
           <Section title="Genres">
@@ -76,6 +94,18 @@ export function Dashboard({
           <Section title="Directors">
             <DirectorsTable directors={enriched.top_directors} />
           </Section>
+
+          {/* Gated on presence: snapshots from before the actor leaderboard (009)
+              have no top_cast, so top_actors is absent/empty — hide rather than
+              crash on undefined. Reappears once a fresh snapshot has cast data. */}
+          {enriched.top_actors?.length ? (
+            <Section title="People">
+              <div className="cards" style={{ marginBottom: 16 }}>
+                <StatCard value={enriched.unique_actors} label="Unique actors" />
+              </div>
+              <PeopleTable actors={enriched.top_actors} />
+            </Section>
+          ) : null}
 
           <Section title="You vs. the crowd">
             <VsCommunity vs={enriched.vs_community} />
