@@ -53,7 +53,7 @@ def watchlist_rows(user_id: str, entries: list[WatchlistEntry]) -> list[dict]:
         seen.add(e.lb_uri)
         rows.append({
             "user_id": user_id,
-            "tmdb_id": None,
+            "tmdb_id": e.tmdb_id,
             "lb_uri": e.lb_uri,
             "title": e.name,
             "year": e.year,

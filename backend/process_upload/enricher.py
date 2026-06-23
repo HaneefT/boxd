@@ -19,9 +19,14 @@ import urllib.parse
 import urllib.request
 from typing import Callable, Optional, Protocol
 
-from .models import Watch
+from .models import Watch, WatchlistEntry
 
 TMDB_BASE = "https://api.themoviedb.org/3"
+
+# Top-billed cast stored per film (DESIGN §10 "People"). 8 covers the actor
+# leaderboard + "unique actors" with headroom; changing it later means re-enriching
+# the whole shared cache, so it's deliberately fixed here.
+TMDB_CAST_N = 8
 
 
 # ---------------------------------------------------------------------------
@@ -64,9 +69,10 @@ class SupabaseFilmCache:
     invocation, which is all `enrich_watches` needs.
     """
 
-    # Columns mirror db/migrations/001_init.sql (minus *_at, server-set).
+    # Columns mirror db/migrations/001_init.sql + 009_film_cast.sql (minus *_at, server-set).
     _COLS = ("tmdb_id", "title", "year", "runtime", "genres", "director",
-             "country", "language", "popularity", "vote_average", "poster_path")
+             "country", "language", "popularity", "vote_average", "poster_path",
+             "top_cast")
 
     def __init__(self, base_url: str, service_key: str, timeout: float = 10.0):
         self.rest_url = base_url.rstrip("/") + "/rest/v1/films"
@@ -192,11 +198,15 @@ class TmdbClient:
     def movie_details(self, tmdb_id: int) -> dict:
         """Fetch details + credits and shape them to the `films` table row."""
         d = self._get(f"/movie/{tmdb_id}", {"append_to_response": "credits"})
+        credits = d.get("credits", {})
         director = next(
-            (c["name"] for c in d.get("credits", {}).get("crew", [])
+            (c["name"] for c in credits.get("crew", [])
              if c.get("job") == "Director"),
             None,
         )
+        # Top-billed cast in billing order (TMDB's `order`, 0 = lead), capped.
+        cast = sorted(credits.get("cast", []), key=lambda c: c.get("order", 1 << 30))
+        top_cast = [c["name"] for c in cast if c.get("name")][:TMDB_CAST_N]
         countries = d.get("production_countries") or []
         release = d.get("release_date") or ""
         return {
@@ -211,6 +221,7 @@ class TmdbClient:
             "popularity": d.get("popularity"),
             "vote_average": d.get("vote_average"),
             "poster_path": d.get("poster_path"),
+            "top_cast": top_cast,
         }
 
 
@@ -230,40 +241,99 @@ def _film_key(w: Watch) -> str:
     return _film_id(w.title, w.year)
 
 
-def enrich_watches(
-    watches: list[Watch],
+def _resolve_film(
+    title: Optional[str],
+    year: Optional[int],
     client: TmdbClient,
     cache: FilmCache,
-    on_progress: Optional[Callable[[int, int], None]] = None,
-) -> tuple[dict[int, dict], list[Watch]]:
-    """Resolve TMDB ids for every watch and populate the cache.
+    resolved: dict[str, Optional[int]],
+    films_used: dict[int, dict],
+) -> Optional[int]:
+    """Resolve one (title, year) to a TMDB id, populating the shared films cache.
 
-    Mutates each Watch's `tmdb_id` in place. Returns (films_by_tmdb, unmatched)
-    where `unmatched` is the list of watches TMDB couldn't resolve.
+    `resolved` memoises by film key so a film appearing in both the diary and the
+    watchlist is searched (and fetched) at most once per upload. Returns None when
+    TMDB can't match it.
     """
-    # One match attempt per unique film, then fan out to its watches.
-    by_film: dict[str, list[Watch]] = {}
-    for w in watches:
-        by_film.setdefault(_film_key(w), []).append(w)
-
-    films_used: dict[int, dict] = {}
-    unmatched: list[Watch] = []
-    total = len(by_film)
-
-    for i, (_key, group) in enumerate(by_film.items(), start=1):
-        sample = group[0]
-        tmdb_id = client.search_movie(sample.title, sample.year)
-        if tmdb_id is None:
-            unmatched.extend(group)
-        else:
+    key = _film_id(title, year)
+    if key not in resolved:
+        tmdb_id = client.search_movie(title, year)
+        resolved[key] = tmdb_id
+        if tmdb_id is not None:
             film = cache.get(tmdb_id)
             if film is None:                       # cold cache -> fetch once
                 film = client.movie_details(tmdb_id)
                 cache.put(film)
             films_used[tmdb_id] = film
+    return resolved[key]
+
+
+def enrich_watches(
+    watches: list[Watch],
+    client: TmdbClient,
+    cache: FilmCache,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+    *,
+    resolved: Optional[dict[str, Optional[int]]] = None,
+    films_used: Optional[dict[int, dict]] = None,
+) -> tuple[dict[int, dict], list[Watch]]:
+    """Resolve TMDB ids for every watch and populate the cache.
+
+    Mutates each Watch's `tmdb_id` in place. Returns (films_by_tmdb, unmatched)
+    where `unmatched` is the list of watches TMDB couldn't resolve. Pass a shared
+    `resolved`/`films_used` to dedup searches against enrich_watchlist.
+    """
+    resolved = resolved if resolved is not None else {}
+    films_used = films_used if films_used is not None else {}
+
+    # One match attempt per unique film, then fan out to its watches.
+    by_film: dict[str, list[Watch]] = {}
+    for w in watches:
+        by_film.setdefault(_film_key(w), []).append(w)
+
+    unmatched: list[Watch] = []
+    total = len(by_film)
+
+    for i, (_key, group) in enumerate(by_film.items(), start=1):
+        sample = group[0]
+        tmdb_id = _resolve_film(sample.title, sample.year, client, cache, resolved, films_used)
+        if tmdb_id is None:
+            unmatched.extend(group)
+        else:
             for w in group:
                 w.tmdb_id = tmdb_id
         if on_progress:
             on_progress(i, total)
 
     return films_used, unmatched
+
+
+def enrich_watchlist(
+    entries: list[WatchlistEntry],
+    client: TmdbClient,
+    cache: FilmCache,
+    *,
+    resolved: Optional[dict[str, Optional[int]]] = None,
+    films_used: Optional[dict[int, dict]] = None,
+) -> dict[int, dict]:
+    """Resolve a TMDB id for each watchlist entry (mutating `tmdb_id` in place) and
+    ensure its film is in the shared cache, so watchlist-actuary stats can join
+    runtime/year/era later. Unmatched entries keep tmdb_id = None.
+
+    Share `resolved`/`films_used` with enrich_watches so a film on both the diary
+    and the watchlist costs a single TMDB search.
+    """
+    resolved = resolved if resolved is not None else {}
+    films_used = films_used if films_used is not None else {}
+
+    by_film: dict[str, list[WatchlistEntry]] = {}
+    for e in entries:
+        by_film.setdefault(_film_id(e.name, e.year), []).append(e)
+
+    for group in by_film.values():
+        sample = group[0]
+        tmdb_id = _resolve_film(sample.name, sample.year, client, cache, resolved, films_used)
+        for e in group:
+            e.tmdb_id = tmdb_id
+
+    return films_used

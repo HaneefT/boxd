@@ -293,6 +293,78 @@ def test_vote_average_feeds_vs_community():
     assert {r["title"] for r in vs["you_overrate"]} == {"Heat", "Sicario"}
 
 
+def test_watchlist_enrichment_dedups_and_populates():
+    """Watchlist entries get a tmdb_id from the shared cache; a film already
+    resolved for the diary isn't searched again."""
+    from process_upload.enricher import InMemoryFilmCache, enrich_watches, enrich_watchlist
+    from process_upload.models import WatchlistEntry
+
+    export = parser.parse_export(_make_export_zip())
+    watches = parser.build_watches(export)
+    seed = {
+        100: {"tmdb_id": 100, "title": "Heat", "year": 1995, "runtime": 170,
+              "genres": ["Crime"], "director": "Michael Mann", "vote_average": 7.9},
+        101: {"tmdb_id": 101, "title": "Sicario", "year": 2015, "runtime": 121,
+              "genres": ["Crime"], "director": "Denis Villeneuve", "vote_average": 7.6},
+        200: {"tmdb_id": 200, "title": "Tenet", "year": 2020, "runtime": 150,
+              "genres": ["Action"], "director": "Christopher Nolan", "vote_average": 7.3},
+    }
+    cache = InMemoryFilmCache(seed)
+    searches: list[str] = []
+
+    class StubClient:
+        def search_movie(self, title, _year):
+            searches.append(title)
+            return {"Heat": 100, "Sicario": 101, "Tenet": 200}.get(title)
+        def movie_details(self, tmdb_id):
+            return seed[tmdb_id]
+
+    client = StubClient()
+    resolved: dict = {}
+    films, _ = enrich_watches(watches, client, cache, resolved=resolved)
+    searches.clear()
+
+    watchlist = [
+        WatchlistEntry("Heat", 1995, "u/heat", None),    # already on the diary
+        WatchlistEntry("Tenet", 2020, "u/tenet", None),  # watchlist-only
+    ]
+    enrich_watchlist(watchlist, client, cache, resolved=resolved, films_used=films)
+
+    # Heat was resolved during the diary pass -> only Tenet hits TMDB now.
+    assert searches == ["Tenet"]
+    assert watchlist[0].tmdb_id == 100 and watchlist[1].tmdb_id == 200
+    assert 200 in films  # the watchlist-only film joins the shared set
+
+
+def test_movie_details_extracts_top_cast():
+    """movie_details keeps the top-billed cast (by TMDB `order`), capped at TMDB_CAST_N."""
+    from process_upload.enricher import TmdbClient, TMDB_CAST_N
+
+    payload = {
+        "id": 100, "title": "Heat", "release_date": "1995-12-15", "runtime": 170,
+        "genres": [{"name": "Crime"}], "production_countries": [{"name": "United States"}],
+        "original_language": "en", "popularity": 12.3, "vote_average": 7.9,
+        "poster_path": "/x.jpg",
+        "credits": {
+            "crew": [{"job": "Director", "name": "Michael Mann"}],
+            # Deliberately out of billing order, with one trailing entry first.
+            "cast": [{"order": 99, "name": "Bit Part"}]
+                    + [{"order": i, "name": f"Actor {i}"} for i in range(TMDB_CAST_N + 3)],
+        },
+    }
+
+    class FakeTmdb(TmdbClient):
+        def __init__(self):
+            super().__init__("key")
+        def _get(self, path, params):
+            assert params.get("append_to_response") == "credits"
+            return payload
+
+    film = FakeTmdb().movie_details(100)
+    assert film["director"] == "Michael Mann"
+    assert film["top_cast"] == [f"Actor {i}" for i in range(TMDB_CAST_N)]  # billing order, capped
+
+
 def _run_all():
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

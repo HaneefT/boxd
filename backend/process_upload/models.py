@@ -71,6 +71,7 @@ class WatchlistEntry:
     year: Optional[int]
     lb_uri: Optional[str]
     added_at: Optional[date]
+    tmdb_id: Optional[int] = None   # filled by the enricher; null means unmatched
 
 
 @dataclass

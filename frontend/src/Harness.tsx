@@ -1,11 +1,16 @@
 import { useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { AccountMenu } from "./components/AccountMenu";
+import { SetPassword } from "./components/SetPassword";
 import { GroupSwitcher } from "./components/GroupSwitcher";
 import { GroupMembers } from "./components/GroupMembers";
 import { GroupComparisonTable } from "./components/GroupComparisonTable";
 import { GenreChart } from "./components/GenreChart";
 import { DirectorsTable } from "./components/DirectorsTable";
 import { ActivityCharts } from "./components/ActivityCharts";
+import { Heatmap } from "./components/Heatmap";
 import { Section } from "./components/Section";
+import type { Activity } from "./types";
 import { StatCard } from "./components/StatCard";
 import type { FilmComparison, Group, GroupStats, RosterMember } from "./groups";
 
@@ -70,6 +75,31 @@ const MOCK_STATS: GroupStats = {
   },
 };
 
+const MOCK_SESSION = {
+  user: { email: "you@example.com", user_metadata: {}, app_metadata: { provider: "email" } },
+} as unknown as Session;
+
+// Multi-year heatmap with DIFFERENT density per year, so the year filter is
+// visibly distinct (2024 sparse/faint, 2025 dense/varied).
+const MOCK_ACTIVITY = {
+  heatmap: (() => {
+    const h: Record<string, number> = {};
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fill = (y: number, step: number, count: (m: number, d: number) => number, endMonth = 12) => {
+      for (let m = 1; m <= endMonth; m++)
+        for (let d = 1; d <= 28; d += step) h[`${y}-${pad(m)}-${pad(d)}`] = count(m, d);
+    };
+    // Many full years so the right-side picker's scroll (>6-7 years) is testable.
+    [2018, 2019, 2020, 2021, 2022, 2023, 2024].forEach((y, i) =>
+      fill(y, (i % 3) + 2, (m, d) => ((d + m + i) % 4) + 1),
+    );
+    // Latest year partial (through June) — simulates the current year, to check it
+    // still renders as a full Jan–Dec grid with blank future days.
+    fill(2025, 2, (m, d) => ((d + m) % 4) + 1, 6);
+    return h;
+  })(),
+} as unknown as Activity;
+
 export function Harness() {
   const [group, setGroup] = useState<Group | null>(null);
 
@@ -80,7 +110,20 @@ export function Harness() {
         <span className="who">you@example.com</span>
         <GroupSwitcher selected={group} onSelect={setGroup} />
         <button className="secondary">Invite a friend</button>
-        <button className="secondary">Sign out</button>
+        <AccountMenu session={MOCK_SESSION} />
+      </div>
+
+      <Section title="Activity (heatmap + year filter)">
+        <Heatmap activity={MOCK_ACTIVITY} />
+      </Section>
+
+      <h2 style={{ marginTop: 40 }}>Harness — set password (first sign-in nudge)</h2>
+      <div className="panel notice pw-nudge" style={{ maxWidth: 520 }}>
+        <div className="group-head">
+          <span className="sub">Set a password for faster sign-in — no more waiting on an email link.</span>
+          <button className="secondary">Not now</button>
+        </div>
+        <SetPassword hasPassword={false} />
       </div>
       <p className="sub" style={{ marginTop: 16 }}>
         Selected: {group?.name ?? "(just me)"}

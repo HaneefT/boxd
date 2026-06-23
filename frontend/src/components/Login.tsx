@@ -6,6 +6,9 @@ import { supabase } from "../supabase";
 // "Database error saving new user" — map that to the real reason.
 function friendlyAuthError(raw: string): string {
   const s = raw.toLowerCase();
+  // Wrong password OR no password set yet both surface as "invalid login credentials".
+  if (s.includes("invalid login credentials"))
+    return "Wrong password — or you haven't set one yet. Use the email sign-in link below.";
   if (s.includes("database error") || s.includes("allowlist") || s.includes("invite"))
     return "That email isn't on the invite list yet — Boxd Stats is friends-only for now.";
   return raw;
@@ -20,6 +23,7 @@ export function Login({
   notice?: React.ReactNode;
 } = {}) {
   const [email, setEmail] = useState(defaultEmail);
+  const [password, setPassword] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,8 +41,17 @@ export function Login({
     }
   }, []);
 
-  async function sendMagicLink(e: React.FormEvent) {
+  async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setBusy(false);
+    // Success: useSession picks up the new session — no redirect needed.
+    if (error) setError(friendlyAuthError(error.message));
+  }
+
+  async function sendMagicLink() {
     setBusy(true);
     setError(null);
     const { error } = await supabase.auth.signInWithOtp({
@@ -71,7 +84,7 @@ export function Login({
           Check your email — we sent a sign-in link to <strong>{email}</strong>.
         </div>
       ) : (
-        <form className="panel login-form" onSubmit={sendMagicLink}>
+        <form className="panel login-form" onSubmit={signInWithPassword}>
           <label htmlFor="email">Email</label>
           <input
             id="email"
@@ -80,9 +93,27 @@ export function Login({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            autoComplete="email"
           />
-          <button type="submit" disabled={busy || !email}>
-            {busy ? "Sending…" : "Email me a sign-in link"}
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password (if you've set one)"
+            autoComplete="current-password"
+          />
+          <button type="submit" disabled={busy || !email || !password}>
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={sendMagicLink}
+            disabled={busy || !email}
+          >
+            Email me a sign-in link instead
           </button>
           <div className="or">or</div>
           <button type="button" className="secondary" onClick={signInWithGoogle}>

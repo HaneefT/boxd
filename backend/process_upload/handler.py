@@ -22,7 +22,7 @@ import os
 from typing import Optional
 
 from . import parser, stats, storage
-from .enricher import SupabaseFilmCache, TmdbClient, enrich_watches
+from .enricher import SupabaseFilmCache, TmdbClient, enrich_watches, enrich_watchlist
 from .persist import SupabaseWriter
 
 
@@ -37,7 +37,11 @@ def run_pipeline(zip_bytes: bytes, user_id: str, *,
 
     client = client or TmdbClient(os.environ["TMDB_API_KEY"])
     cache = cache or SupabaseFilmCache.from_env()
-    films, unmatched = enrich_watches(watches, client, cache)
+    # Share the search memo so a film on both the diary and the watchlist is
+    # resolved once; watchlist enrichment fills WatchlistEntry.tmdb_id in place.
+    resolved: dict[str, Optional[int]] = {}
+    films, unmatched = enrich_watches(watches, client, cache, resolved=resolved)
+    enrich_watchlist(export.watchlist, client, cache, resolved=resolved, films_used=films)
 
     snapshot = stats.compute_snapshot(
         watches, films=films or None,
