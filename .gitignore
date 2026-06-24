@@ -29,7 +29,8 @@ shoot.mjs
 secrets/
 
 # Local-only docs
-*.md
+/STATUS.md
+/DESIGN.md
 
 # Terraform
 .terraform/
