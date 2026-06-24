@@ -156,9 +156,10 @@ def _watchlist_stats(
     added = sorted(e.added_at for e in dated)
     today = date.today()
     cutoff = today - timedelta(days=730)
-    # Backlog hall of shame: the single oldest still-unwatched add (the one you keep
-    # deferring) and the average age of everything on the list.
+    # Backlog timeline: the single oldest still-unwatched add (the one you keep
+    # deferring), the most recent add, and the average age of everything on the list.
     oldest = min(dated, key=lambda e: e.added_at, default=None)
+    newest = max(dated, key=lambda e: e.added_at, default=None)
     ages = [(today - e.added_at).days for e in dated]
     return {
         "count": len(watchlist),
@@ -175,6 +176,10 @@ def _watchlist_stats(
                 "added_at": oldest.added_at.isoformat(),
                 "years_ago": _round((today - oldest.added_at).days / 365, 1),
             } if oldest else None,
+            "newest": {
+                "title": newest.name,
+                "added_at": newest.added_at.isoformat(),
+            } if newest else None,
             "avg_age_days": _round(statistics.fmean(ages), 0) if ages else None,
         },
         "velocity": _watchlist_velocity(

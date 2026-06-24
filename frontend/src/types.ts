@@ -89,6 +89,7 @@ export interface WatchlistVelocity {
 
 export interface WatchlistBacklog {
   oldest: { title: string; added_at: string; years_ago: number } | null;
+  newest: { title: string; added_at: string } | null;
   avg_age_days: number | null;
 }
 

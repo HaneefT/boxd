@@ -12,7 +12,7 @@ import { PeopleTable } from "./PeopleTable";
 import { WatchlistActuary } from "./WatchlistActuary";
 import { VsCommunity } from "./VsCommunity";
 import { GroupView } from "./GroupView";
-import { StatCard } from "./StatCard";
+import { StatCard, withUnit } from "./StatCard";
 import { Unmatched } from "./Unmatched";
 
 export function Dashboard({
@@ -63,10 +63,10 @@ export function Dashboard({
         <div style={{ height: 16 }} />
         <ActivityCharts activity={core.activity} />
         <div className="cards" style={{ marginTop: 16 }}>
-          <StatCard value={`${core.activity.longest_streak_days}d`} label="Longest streak" />
+          <StatCard value={withUnit(core.activity.longest_streak_days, "d")} label="Longest streak" />
           {big && <StatCard value={big.films} label="Biggest day" hint={big.date} />}
           <StatCard
-            value={era.avg_film_age_at_watch != null ? `${era.avg_film_age_at_watch}y` : "—"}
+            value={era.avg_film_age_at_watch != null ? withUnit(era.avg_film_age_at_watch, "y") : "—"}
             label="Avg film age at watch"
           />
           <StatCard

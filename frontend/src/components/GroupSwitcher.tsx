@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createGroup, listMyGroups, type Group } from "../groups";
 import { useClickAway } from "../useClickAway";
 import { Dropdown } from "./Dropdown";
+import { IconUsers } from "./icons";
 
 // Appbar control: pick which group the dashboard compares against ("Just me" =
 // no group), and create a new one inline. Reports the selected Group up so the
@@ -73,10 +74,11 @@ export function GroupSwitcher({
         onChange={(v) => onSelect(groups.find((g) => g.id === v) ?? null)}
       />
       <button
-        className="secondary"
+        className="secondary icon-btn"
+        aria-label="New group"
         onClick={() => setOpenPanel((p) => (p === "create" ? "none" : "create"))}
       >
-        New group
+        <IconUsers /> <span className="btn-label">New group</span>
       </button>
 
       {openPanel === "create" && (

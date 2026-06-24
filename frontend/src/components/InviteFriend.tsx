@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { supabase } from "../supabase";
 import { useClickAway } from "../useClickAway";
+import { IconUserPlus } from "./icons";
 
 // Owner-only: mints an invite link (create_invite RPC) and copies it. The link is
 // open to unlimited sign-ups but expires after a day, so a stale shared link can't
@@ -43,14 +44,15 @@ export function InviteFriend() {
   return (
     <div className="invite-friend" ref={root}>
       <button
-        className="secondary"
+        className="secondary icon-btn"
+        aria-label="Invite a friend"
         onClick={() => {
           setOpen((o) => !o);
           setLink(null);
           setError(null);
         }}
       >
-        Invite a friend
+        <IconUserPlus /> <span className="btn-label">Invite a friend</span>
       </button>
 
       {open && (

@@ -3,9 +3,13 @@ import type { Session } from "@supabase/supabase-js";
 import { AccountMenu } from "./components/AccountMenu";
 import { SetPassword } from "./components/SetPassword";
 import { GroupSwitcher } from "./components/GroupSwitcher";
+import { MobileMenu } from "./components/MobileMenu";
 import { GroupMembers } from "./components/GroupMembers";
 import { GroupComparisonTable } from "./components/GroupComparisonTable";
 import { GenreChart } from "./components/GenreChart";
+import { RatingHistogram } from "./components/RatingHistogram";
+import { VsCommunity } from "./components/VsCommunity";
+import { IconMenu, IconUserPlus, IconRefresh } from "./components/icons";
 import { DirectorsTable } from "./components/DirectorsTable";
 import { PeopleTable } from "./components/PeopleTable";
 import { WatchlistActuary } from "./components/WatchlistActuary";
@@ -13,8 +17,8 @@ import { Wrapped } from "./components/Wrapped";
 import { ActivityCharts } from "./components/ActivityCharts";
 import { Heatmap } from "./components/Heatmap";
 import { Section } from "./components/Section";
-import type { Activity, Core, Enriched, EnrichedWatchlist, Profile, Watchlist } from "./types";
-import { StatCard } from "./components/StatCard";
+import type { Activity, Core, Enriched, EnrichedWatchlist, Profile, Ratings, Watchlist } from "./types";
+import { StatCard, withUnit } from "./components/StatCard";
 import type { FilmComparison, Group, GroupStats, RosterMember } from "./groups";
 
 // Dev-only visual playground (open with ?harness). Renders real components in
@@ -100,6 +104,7 @@ const MOCK_WATCHLIST: Watchlist = {
   },
   backlog: {
     oldest: { title: "Stalker", added_at: "2018-02-11", years_ago: 7.4 },
+    newest: { title: "The Substance", added_at: "2025-05-20" },
     avg_age_days: 612,
   },
 };
@@ -133,6 +138,11 @@ const MOCK_WRAPPED_ENRICHED = {
 } as unknown as Enriched;
 const MOCK_WRAPPED_PROFILE: Profile = { username: "artemis24", date_joined: null, favorite_films: [] };
 
+const MOCK_RATINGS: Ratings = {
+  count: 1240, mean: 3.6, median: 3.5, stdev: 0.8,
+  histogram: { "0.5": 4, "1.0": 9, "1.5": 18, "2.0": 55, "2.5": 90, "3.0": 180, "3.5": 240, "4.0": 300, "4.5": 210, "5.0": 134 },
+};
+
 // Actor leaderboard (solo "People" view) — some with no rated films (avg ★ = —).
 const MOCK_ACTORS = [
   { actor: "Toni Collette", films: 11, avg_rating: 4.2 },
@@ -165,16 +175,64 @@ const MOCK_ACTIVITY = {
 
 export function Harness() {
   const [group, setGroup] = useState<Group | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className="app" style={{ paddingTop: 40 }}>
       <h2 style={{ marginTop: 0 }}>Harness — appbar controls</h2>
       <div className="appbar">
-        <span className="who">you@example.com</span>
-        <GroupSwitcher selected={group} onSelect={setGroup} />
-        <button className="secondary">Invite a friend</button>
-        <AccountMenu session={MOCK_SESSION} />
+        <button className="hamburger secondary icon-btn" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
+          <IconMenu />
+        </button>
+        <div className={`appbar-controls ${menuOpen ? "open" : ""}`}>
+          <span className="who">you@example.com</span>
+          <GroupSwitcher selected={group} onSelect={setGroup} />
+          <button className="secondary icon-btn" aria-label="Invite a friend"><IconUserPlus /> <span className="btn-label">Invite a friend</span></button>
+          <button className="secondary icon-btn" aria-label="Refresh stats"><IconRefresh /> <span className="btn-label">Refresh stats</span></button>
+          <AccountMenu session={MOCK_SESSION} />
+        </div>
+        {menuOpen && (
+          <MobileMenu
+            session={MOCK_SESSION}
+            group={group}
+            onSelectGroup={setGroup}
+            isOwner
+            canRefresh
+            onReuploaded={() => {}}
+            onClose={() => setMenuOpen(false)}
+          />
+        )}
       </div>
+
+      <Section title="Ratings (histogram + themed tooltip)">
+        <RatingHistogram ratings={MOCK_RATINGS} />
+      </Section>
+
+      <Section title="Stat cards — unit formatting">
+        <div className="cards">
+          <StatCard value={withUnit(7, "d")} label="Longest streak" />
+          <StatCard value={141} label="Biggest day" hint="2023-02-20" />
+          <StatCard value={withUnit(11.43, "y")} label="Avg film age at watch" />
+          <StatCard value="1972–2026" label="Year range" />
+        </div>
+      </Section>
+
+      <Section title="You vs. the crowd">
+        <VsCommunity
+          vs={{
+            mean_delta: -0.14,
+            verdict: "in line with the crowd",
+            you_overrate: [
+              { title: "Sicario", you: 5.0, community: 3.8, delta: 1.2 },
+              { title: "Heat", you: 4.5, community: 4.0, delta: 0.5 },
+            ],
+            you_underrate: [
+              { title: "Tenet", you: 2.5, community: 3.7, delta: -1.2 },
+              { title: "Joker", you: 3.0, community: 4.0, delta: -1.0 },
+            ],
+          }}
+        />
+      </Section>
 
       <Section title="Your year, wrapped">
         <Wrapped core={MOCK_WRAPPED_CORE} enriched={MOCK_WRAPPED_ENRICHED} profile={MOCK_WRAPPED_PROFILE} />
@@ -225,7 +283,7 @@ export function Harness() {
         </div>
         <PeopleTable actors={MOCK_ACTORS} />
       </Section>
-      <Section title="Watchlist actuary (never-clears case)">
+      <Section title="Watchlist">
         <WatchlistActuary watchlist={MOCK_WATCHLIST} enriched={MOCK_ENRICHED_WL} />
       </Section>
       <Section title="Group activity">

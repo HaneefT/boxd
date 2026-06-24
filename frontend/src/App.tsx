@@ -14,6 +14,8 @@ import { Upload } from "./components/Upload";
 import { Dashboard } from "./components/Dashboard";
 import { AccountMenu } from "./components/AccountMenu";
 import { SetPassword } from "./components/SetPassword";
+import { MobileMenu } from "./components/MobileMenu";
+import { IconMenu, IconRefresh } from "./components/icons";
 
 export function App() {
   const { session, loading: authLoading } = useSession();
@@ -31,6 +33,8 @@ export function App() {
   // Re-upload a fresh export to recompute the snapshot (DESIGN §2.4 — "fresh stats =
   // re-upload"). The raw ZIP is deleted after parsing, so there's nothing to reprocess.
   const [reuploading, setReuploading] = useState(false);
+  // Mobile: the appbar controls collapse behind a hamburger (MobileMenu).
+  const [menuOpen, setMenuOpen] = useState(false);
   // A fresh token from the URL, or one stashed before a sign-in redirect (which
   // strips the query string). Resolved once into state; the stash is dropped as
   // soon as it's consumed (below) or on done.
@@ -107,15 +111,36 @@ export function App() {
     <div className="app">
       {isSupabaseConfigured && (
         <div className="appbar">
-          <span className="who">{session?.user.email}</span>
-          <GroupSwitcher selected={group} onSelect={setGroup} />
-          {isOwner && <InviteFriend />}
-          {snap && (
-            <button className="secondary" onClick={() => setReuploading((r) => !r)}>
-              Refresh stats
-            </button>
+          <button
+            className="hamburger secondary icon-btn"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <IconMenu />
+          </button>
+          <div className="appbar-controls">
+            <span className="who">{session?.user.email}</span>
+            <GroupSwitcher selected={group} onSelect={setGroup} />
+            {isOwner && <InviteFriend />}
+            {snap && (
+              <button className="secondary icon-btn" aria-label="Refresh stats" onClick={() => setReuploading((r) => !r)}>
+                <IconRefresh /> <span className="btn-label">Refresh stats</span>
+              </button>
+            )}
+            {session && <AccountMenu session={session} />}
+          </div>
+          {menuOpen && session && (
+            <MobileMenu
+              session={session}
+              group={group}
+              onSelectGroup={setGroup}
+              isOwner={isOwner}
+              canRefresh={!!snap}
+              onReuploaded={reload}
+              onClose={() => setMenuOpen(false)}
+            />
           )}
-          {session && <AccountMenu session={session} />}
         </div>
       )}
 

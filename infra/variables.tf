@@ -48,14 +48,3 @@ variable "app_domain" {
   default     = "boxd.haneeftaher.com"
 }
 
-variable "basic_auth_user" {
-  type        = string
-  description = "Username for the pre-launch Basic Auth gate."
-  default     = "boxd"
-}
-
-variable "basic_auth_password" {
-  type        = string
-  description = "Password for the pre-launch Basic Auth gate."
-  sensitive   = true
-}

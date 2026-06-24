@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../supabase";
 import { useClickAway } from "../useClickAway";
 import { SetPassword } from "./SetPassword";
+import { IconUser } from "./icons";
 
 // Appbar account control: the always-available home for set/change-password + sign
 // out. Mutually exclusive with the other appbar popovers via useClickAway.
@@ -15,8 +16,8 @@ export function AccountMenu({ session }: { session: Session }) {
 
   return (
     <div className="invite-friend" ref={root}>
-      <button className="secondary" onClick={() => setOpen((o) => !o)}>
-        Account
+      <button className="secondary icon-btn" aria-label="Account" onClick={() => setOpen((o) => !o)}>
+        <IconUser /> <span className="btn-label">Account</span>
       </button>
 
       {open && (

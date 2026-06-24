@@ -38,12 +38,6 @@ resource "aws_cloudfront_distribution" "spa" {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
-
-    # Pre-launch gate (remove at launch — see gate.tf).
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.basic_auth.arn
-    }
   }
 
   # SPA client-side routing: hand unknown paths back to index.html.

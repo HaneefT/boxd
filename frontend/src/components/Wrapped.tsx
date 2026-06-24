@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Core, Enriched, Profile } from "../types";
+import { genreLabel } from "../labels";
 
 // Only completed years get a "wrapped" — the current (in-progress) year isn't a
 // year-in-review yet; it appears on its own once it ends. Single source of truth for
@@ -70,7 +71,7 @@ export function Wrapped({
         {topGenres.length > 0 && (
           <span className="wrapped-genres">
             {topGenres.map((g) => (
-              <span key={g} className="chip">{g}</span>
+              <span key={g} className="chip">{genreLabel(g)}</span>
             ))}
           </span>
         )}

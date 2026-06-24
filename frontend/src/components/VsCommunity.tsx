@@ -31,13 +31,20 @@ function DeltaTable({ title, rows, kind }: { title: string; rows: CommunityDelta
   );
 }
 
+// Phrase the verdict against the TMDB crowd without the raw mean/delta numbers
+// (those live in the Δ column of the tables below).
+const VERDICT: Record<string, string> = {
+  "harsh critic": "harsher than the TMDB crowd",
+  generous: "more generous than the TMDB crowd",
+  "in line with the crowd": "in line with the TMDB crowd",
+};
+
 export function VsCommunity({ vs }: { vs: VsCommunityT }) {
   return (
     <>
       {vs.verdict && (
         <p style={{ color: "var(--muted)", marginTop: 0 }}>
-          Your ratings run <strong>{vs.verdict}</strong>
-          {vs.mean_delta != null && ` (mean Δ ${vs.mean_delta > 0 ? "+" : ""}${vs.mean_delta}★ vs the TMDB crowd)`}.
+          Your ratings run <strong>{VERDICT[vs.verdict] ?? vs.verdict}</strong>.
         </p>
       )}
       <div className="grid-2">

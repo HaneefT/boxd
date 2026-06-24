@@ -1,0 +1,331 @@
+<!-- @dsCard group="Boxd Stats" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Boxd Stats — personal dashboard</title>
+<style>
+  :root {
+    --bg: #14181c; --bg-elev: #1c2228; --bg-elev-2: #232b33; --line: #2c353d;
+    --text: #e6e9ec; --muted: #9ab; --muted-dim: #678;
+    --accent: #00b020; --accent-2: #40bcf4; --orange: #ff8000;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+  .app { max-width: 1100px; margin: 0 auto; padding: 32px 20px 60px; }
+  a { color: var(--accent-2); }
+
+  .app-header { margin-bottom: 8px; }
+  .app-header h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.5px; }
+  .app-header .sub { color: var(--muted); font-size: 14px; }
+
+  .appbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .appbar .who { color: var(--muted); font-size: 13px; margin-right: auto; }
+  button { font: inherit; background: var(--accent); color: #08130a; border: 1px solid transparent; border-radius: 8px; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+  button.secondary { background: var(--bg-elev-2); color: var(--text); border-color: var(--line); }
+  .icon-btn { display: inline-flex; align-items: center; gap: 7px; }
+  .icon-btn svg { flex-shrink: 0; opacity: 0.85; }
+
+  .section { margin-top: 40px; }
+  .section > h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted-dim); font-weight: 700; margin: 0 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .card { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card .value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .card .label { color: var(--muted); font-size: 12px; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card .hint { color: var(--muted-dim); font-size: 12px; margin-top: 4px; }
+  .panel { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Tables */
+  table.lb { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.lb th, table.lb td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  table.lb th { color: var(--muted-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  table.lb td.num, table.lb th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .delta-pos { color: var(--accent); }
+  .delta-neg { color: var(--orange); }
+
+  /* Wrapped */
+  .wrapped { border-radius: 14px; padding: 24px; border: 1px solid var(--line);
+    background: radial-gradient(120% 140% at 0% 0%, rgba(0,176,32,0.22), transparent 60%),
+                radial-gradient(120% 140% at 100% 0%, rgba(64,188,244,0.22), transparent 60%),
+                radial-gradient(140% 160% at 100% 100%, rgba(255,128,0,0.16), transparent 55%), var(--bg-elev); }
+  .wrapped-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .wrapped-kicker { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-weight: 600; }
+  .wrapped-years { display: flex; gap: 6px; flex-wrap: wrap; }
+  .wrapped-years button { padding: 4px 12px; font-size: 12px; font-weight: 600; }
+  .wrapped-hero { display: flex; flex-direction: column; align-items: center; margin: 24px 0 20px; }
+  .wrapped-number { font-size: 72px; font-weight: 800; line-height: 1; letter-spacing: -2px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .wrapped-label { margin-top: 8px; color: var(--muted); font-size: 15px; }
+  .wrapped-facts { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .wrapped-genres { display: flex; gap: 6px; flex-wrap: wrap; }
+  .wrapped .chip { background: rgba(255,255,255,0.08); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+  .wrapped-foot { margin-top: 20px; text-align: center; color: var(--muted-dim); font-size: 11px; letter-spacing: 0.5px; }
+
+  /* Simple CSS bar charts (ratings / weekday / month) */
+  .barchart { display: flex; align-items: flex-end; gap: 6px; height: 200px; }
+  .barchart .bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; color: var(--muted-dim); font-size: 11px; }
+  .barchart .bar > i { width: 100%; border-radius: 3px 3px 0 0; background: #3a6b3f; }
+  .barchart .bar.peak > i { background: var(--accent); }
+  .barchart .bar.blue > i { background: var(--accent-2); opacity: 0.8; }
+
+  /* Heatmap */
+  .heatmap-body { display: flex; gap: 16px; align-items: flex-start; }
+  .heatmap-main { flex: 1; min-width: 0; }
+  .heatmap-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .heatmap-legend { display: flex; align-items: center; gap: 6px; color: var(--muted-dim); font-size: 12px; margin-top: 8px; }
+  .heatmap-legend .swatch { width: 11px; height: 11px; border-radius: 2px; }
+  .heatmap-years { display: flex; flex-direction: column; gap: 6px; }
+  .heatmap-years button { width: 100%; padding: 5px 14px; font-size: 12px; font-weight: 600; }
+
+  /* Genre bubble chart */
+  .bubble-wrap { position: relative; max-width: 560px; margin: 0 auto; }
+  .bubble-readout { position: absolute; top: 6px; right: 10px; text-align: right; }
+  .bubble-readout strong { display: block; font-size: 15px; }
+  .bubble-readout span { font-size: 12px; color: var(--muted-dim); }
+
+  /* Watchlist actuary */
+  .wl-row { display: flex; gap: 14px; align-items: flex-start; margin-top: 14px; font-size: 14px; }
+  .wl-key { flex: 0 0 120px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted-dim); padding-top: 1px; }
+  .wl-gap { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .wl-gap-row { display: flex; align-items: center; gap: 12px; }
+  .wl-gap-mult { flex: 0 0 36px; font-weight: 700; color: var(--accent-2); font-variant-numeric: tabular-nums; }
+  .wl-gap-name { flex: 0 0 110px; }
+  .wl-gap-bar { flex: 1; height: 6px; background: var(--bg-elev-2); border-radius: 3px; overflow: hidden; }
+  .wl-gap-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+  /* Unmatched */
+  .unmatched .sub { margin: 0 0 10px; color: var(--muted-dim); font-size: 13px; }
+  .unmatched ul { margin: 0; padding-left: 18px; columns: 2; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- Appbar -->
+    <div class="appbar">
+      <span class="who">you@example.com</span>
+      <button class="secondary icon-btn">Just me <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="secondary icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> New group</button>
+      <button class="secondary icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Invite a friend</button>
+      <button class="secondary icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh stats</button>
+      <button class="secondary icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Account</button>
+    </div>
+
+    <header class="app-header">
+      <h1>artemisf24 · Boxd Stats</h1>
+      <div class="sub">On Letterboxd since 2023-02-21. Logging from 2023-02-20 to 2026-02-16.</div>
+    </header>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>Overview</h2>
+      <div class="cards">
+        <div class="card"><div class="value">325</div><div class="label">Films</div><div class="hint">349 logged</div></div>
+        <div class="card"><div class="value">733</div><div class="label">Hours watched</div><div class="hint">30.5 days</div></div>
+        <div class="card"><div class="value">347</div><div class="label">Ratings</div><div class="hint">mean 3.6 ★</div></div>
+        <div class="card"><div class="value">190</div><div class="label">Unique directors</div></div>
+      </div>
+    </div>
+
+    <!-- Wrapped -->
+    <div class="section">
+      <h2>Your year, wrapped</h2>
+      <div class="wrapped">
+        <div class="wrapped-head">
+          <span class="wrapped-kicker">artemisf24 · 2025, wrapped</span>
+          <div class="wrapped-years">
+            <button>2025</button><button class="secondary">2024</button><button class="secondary">2023</button>
+          </div>
+        </div>
+        <div class="wrapped-hero">
+          <span class="wrapped-number">142</span>
+          <span class="wrapped-label">films logged in 2025</span>
+        </div>
+        <div class="wrapped-facts">
+          <span>1st busiest of your 3 years</span>
+          <span class="wrapped-genres"><span class="chip">Drama</span><span class="chip">Thriller</span><span class="chip">Sci-Fi</span></span>
+        </div>
+        <div class="wrapped-foot">Boxd Stats</div>
+      </div>
+    </div>
+
+    <!-- Ratings -->
+    <div class="section">
+      <h2>Ratings</h2>
+      <div class="panel"><div class="barchart" id="ratings"></div></div>
+    </div>
+
+    <!-- Activity -->
+    <div class="section">
+      <h2>Activity</h2>
+      <div class="panel">
+        <div class="heatmap-body">
+          <div class="heatmap-main">
+            <div class="heatmap-wrap"><svg id="heatmap" role="img" aria-label="Watch frequency heatmap"></svg></div>
+            <div class="heatmap-legend"><span>Less</span><span class="swatch" style="background:#2a323b"></span><span class="swatch" style="background:#0e4d1a"></span><span class="swatch" style="background:#15732a"></span><span class="swatch" style="background:#1f9c39"></span><span class="swatch" style="background:#2dd257"></span><span>More</span></div>
+          </div>
+          <div class="heatmap-years"><button>2025</button><button class="secondary">2024</button><button class="secondary">2023</button></div>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:16px">
+        <div class="panel"><div class="label" style="margin-bottom:10px">By weekday</div><div class="barchart" id="weekday" style="height:160px"></div></div>
+        <div class="panel"><div class="label" style="margin-bottom:10px">By month</div><div class="barchart" id="month" style="height:160px"></div></div>
+      </div>
+      <div class="cards" style="margin-top:16px">
+        <div class="card"><div class="value">11d</div><div class="label">Longest streak</div></div>
+        <div class="card"><div class="value">6</div><div class="label">Biggest day</div><div class="hint">2025-01-02</div></div>
+        <div class="card"><div class="value">14y</div><div class="label">Avg film age at watch</div></div>
+        <div class="card"><div class="value">1931–2025</div><div class="label">Year range</div></div>
+      </div>
+    </div>
+
+    <!-- Genres (bubble) -->
+    <div class="section">
+      <h2>Genres</h2>
+      <div class="panel">
+        <div class="bubble-wrap">
+          <div class="bubble-readout"><strong>Drama</strong><span>180 films</span></div>
+          <svg viewBox="0 0 520 420" width="100%" style="display:block;height:auto" role="img" aria-label="Genre distribution">
+            <g transform="translate(205,235)"><circle r="92" fill="#40bcf4" fill-opacity="0.8" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="-0.15em" font-size="16" fill="#fff" font-weight="600">Drama</text><text text-anchor="middle" dy="1.15em" font-size="13" fill="rgba(255,255,255,0.65)">180</text></g>
+            <g transform="translate(330,250)"><circle r="74" fill="#40bcf4" fill-opacity="0.62" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="-0.15em" font-size="15" fill="#fff" font-weight="600">Action</text><text text-anchor="middle" dy="1.15em" font-size="12" fill="rgba(255,255,255,0.65)">120</text></g>
+            <g transform="translate(270,120)"><circle r="62" fill="#40bcf4" fill-opacity="0.55" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="0.32em" font-size="14" fill="#fff" font-weight="600">Thriller</text></g>
+            <g transform="translate(150,110)"><circle r="50" fill="#40bcf4" fill-opacity="0.45" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="0.32em" font-size="13" fill="#fff" font-weight="600">Animation</text></g>
+            <g transform="translate(70,190)"><circle r="44" fill="#40bcf4" fill-opacity="0.42" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="0.32em" font-size="12" fill="#fff" font-weight="600">Horror</text></g>
+            <g transform="translate(380,135)"><circle r="46" fill="#40bcf4" fill-opacity="0.42" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="0.32em" font-size="12" fill="#fff" font-weight="600">Comedy</text></g>
+            <g transform="translate(110,300)"><circle r="40" fill="#40bcf4" fill-opacity="0.38" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="0.32em" font-size="11" fill="#fff" font-weight="600">Sci-Fi</text></g>
+            <g transform="translate(240,330)"><circle r="36" fill="#40bcf4" fill-opacity="0.35" stroke="#40bcf4" stroke-opacity="0.55"/><text text-anchor="middle" dy="0.32em" font-size="11" fill="#fff" font-weight="600">Crime</text></g>
+            <g transform="translate(420,235)"><circle r="30" fill="#40bcf4" fill-opacity="0.3" stroke="#40bcf4" stroke-opacity="0.55"/></g>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Directors -->
+    <div class="section">
+      <h2>Directors</h2>
+      <div class="panel">
+        <table class="lb">
+          <thead><tr><th>Director</th><th class="num">Films</th><th class="num">Avg ★</th></tr></thead>
+          <tbody>
+            <tr><td>Christopher Nolan</td><td class="num">9</td><td class="num">4.10</td></tr>
+            <tr><td>Denis Villeneuve</td><td class="num">7</td><td class="num">4.30</td></tr>
+            <tr><td>Bong Joon-ho</td><td class="num">5</td><td class="num">4.50</td></tr>
+            <tr><td>Greta Gerwig</td><td class="num">5</td><td class="num">3.90</td></tr>
+            <tr><td>Quentin Tarantino</td><td class="num">4</td><td class="num">4.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- People -->
+    <div class="section">
+      <h2>People</h2>
+      <div class="cards" style="margin-bottom:16px"><div class="card"><div class="value">128</div><div class="label">Unique actors</div></div></div>
+      <div class="panel">
+        <table class="lb">
+          <thead><tr><th>Actor</th><th class="num">Films</th><th class="num">Avg ★</th></tr></thead>
+          <tbody>
+            <tr><td>Toni Collette</td><td class="num">11</td><td class="num">4.20</td></tr>
+            <tr><td>Oscar Isaac</td><td class="num">9</td><td class="num">4.00</td></tr>
+            <tr><td>Tilda Swinton</td><td class="num">8</td><td class="num">4.40</td></tr>
+            <tr><td>Michael Fassbender</td><td class="num">7</td><td class="num">3.80</td></tr>
+            <tr><td>Florence Pugh</td><td class="num">6</td><td class="num">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Watchlist actuary -->
+    <div class="section">
+      <h2>Watchlist</h2>
+      <div class="panel">
+        <div class="cards">
+          <div class="card"><div class="value">39</div><div class="label">On your watchlist</div></div>
+          <div class="card"><div class="value">72h</div><div class="label">Runtime to clear</div></div>
+          <div class="card"><div class="value">5 mo</div><div class="label">At your current pace</div><div class="hint">cleared by 2026-11</div></div>
+          <div class="card"><div class="value">15 mo</div><div class="label">Avg wait</div><div class="hint">longest: White Chicks (1.9 yrs)</div></div>
+        </div>
+        <div class="wl-row">
+          <span class="wl-key">Taste skew</span>
+          <div class="wl-gap">
+            <div class="wl-gap-row"><span class="wl-gap-mult">∞</span><span class="wl-gap-name">Documentary</span><span class="wl-gap-bar"><i style="width:100%"></i></span></div>
+            <div class="wl-gap-row"><span class="wl-gap-mult">2.4×</span><span class="wl-gap-name">Romance</span><span class="wl-gap-bar"><i style="width:62%"></i></span></div>
+            <div class="wl-gap-row"><span class="wl-gap-mult">2×</span><span class="wl-gap-name">Drama</span><span class="wl-gap-bar"><i style="width:45%"></i></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- You vs the crowd -->
+    <div class="section">
+      <h2>You vs. the crowd</h2>
+      <p style="color:var(--muted);margin-top:0">Your ratings run <strong>generous</strong> (mean Δ +0.4★ vs the TMDB crowd).</p>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="label" style="margin-bottom:10px">You rate higher</div>
+          <table class="lb">
+            <thead><tr><th>Film</th><th class="num">You</th><th class="num">Crowd</th><th class="num">Δ</th></tr></thead>
+            <tbody>
+              <tr><td>Sicario</td><td class="num">5.0</td><td class="num">3.8</td><td class="num delta-pos">+1.2</td></tr>
+              <tr><td>Heat</td><td class="num">4.5</td><td class="num">4.0</td><td class="num delta-pos">+0.5</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="label" style="margin-bottom:10px">You rate lower</div>
+          <table class="lb">
+            <thead><tr><th>Film</th><th class="num">You</th><th class="num">Crowd</th><th class="num">Δ</th></tr></thead>
+            <tbody>
+              <tr><td>Tenet</td><td class="num">2.5</td><td class="num">3.7</td><td class="num delta-neg">-1.2</td></tr>
+              <tr><td>Joker</td><td class="num">3.0</td><td class="num">4.0</td><td class="num delta-neg">-1.0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unmatched -->
+    <div class="section">
+      <h2>Unmatched films</h2>
+      <div class="panel unmatched">
+        <p class="sub">12 films TMDB couldn't match — help us out:</p>
+        <ul><li>Old Boy (2003)</li><li>The Host (2006)</li><li>Dune (1984)</li><li>Solaris (1972)</li><li>Stalker (1979)</li><li>Persona (1966)</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Repetitive bits (heatmap grid + bar charts) generated to keep the markup lean.
+    const SHADES = ["#2a323b", "#0e4d1a", "#15732a", "#1f9c39", "#2dd257"];
+    function bars(id, vals, peakColor) {
+      const max = Math.max(...vals.map((v) => v[1]));
+      document.getElementById(id).innerHTML = vals.map(([label, v]) => {
+        const peak = v === max ? (peakColor === "blue" ? "blue" : "peak") : "";
+        return '<div class="bar ' + peak + '"><i style="height:' + Math.round((v / max) * 100) + '%"></i>' + label + '</div>';
+      }).join("");
+    }
+    bars("ratings", [["0.5",4],["1.0",9],["1.5",18],["2.0",55],["2.5",90],["3.0",180],["3.5",240],["4.0",300],["4.5",210],["5.0",134]]);
+    bars("weekday", [["Mon",40],["Tue",35],["Wed",42],["Thu",50],["Fri",88],["Sat",120],["Sun",95]], "blue");
+    bars("month", [["J",60],["F",45],["M",55],["A",48],["M",52],["J",70],["J",80],["A",75],["S",50],["O",58],["N",49],["D",90]], "blue");
+
+    // Heatmap: 53 weeks x 7 days, GitHub-style.
+    const CELL = 12, GAP = 3, LABEL_W = 30, step = CELL + GAP;
+    const weeks = 53, svg = document.getElementById("heatmap");
+    svg.setAttribute("width", weeks * step + LABEL_W);
+    svg.setAttribute("height", 7 * step + 20);
+    let html = "";
+    ["Mon", "Wed", "Fri"].forEach((d, i) => { html += '<text x="0" y="' + ((i * 2) * step + 28) + '" fill="#678" font-size="10">' + d + "</text>"; });
+    ["Jan","Mar","May","Jul","Sep","Nov"].forEach((m, i) => { html += '<text x="' + (i * 9 * step + LABEL_W) + '" y="10" fill="#678" font-size="10">' + m + "</text>"; });
+    html += '<g transform="translate(' + LABEL_W + ',16)">';
+    for (let c = 0; c < weeks; c++) for (let r = 0; r < 7; r++) {
+      const v = Math.max(0, Math.floor(Math.sin(c * 0.6 + r) * 2 + Math.random() * 3));
+      html += '<rect x="' + c * step + '" y="' + r * step + '" width="' + CELL + '" height="' + CELL + '" rx="2" fill="' + SHADES[Math.min(4, v)] + '"/>';
+    }
+    html += "</g>";
+    svg.innerHTML = html;
+  </script>
+</body>
+</html>
