@@ -120,12 +120,24 @@ export interface Enriched {
   runtime: Runtime;
   genres: Record<string, number>;
   genre_by_year: Record<string, Record<string, number>>;
+  // One row per unique film, with its genres — powers the genre-bubble drill-down.
+  // Absent on snapshots computed before this field; guard on presence.
+  films?: GenreFilm[];
   countries: Record<string, number>;
   languages: Record<string, number>;
   top_directors: { director: string; films: number; avg_rating: number | null }[];
   top_actors: { actor: string; films: number; avg_rating: number | null }[];
   unique_actors: number;
   vs_community: VsCommunity;
+}
+
+export interface GenreFilm {
+  title: string;
+  year: number | null;
+  genres: string[];
+  rating: number | null;
+  last_watched: string | null; // ISO date of most recent viewing, or null if undated
+  poster_path: string | null;
 }
 
 export interface Runtime {

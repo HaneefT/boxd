@@ -14,7 +14,9 @@ export const ownerEmail = (import.meta.env.VITE_OWNER_EMAIL as string | undefine
 
 // In dev with no Supabase configured, we fall back to the static stats.json path
 // (see data.ts), so don't hard-crash module load — only error on actual use.
+// Use || not ?? so a blank ("") env var is treated as unset (matching
+// isSupabaseConfigured's Boolean(url && anonKey)); createClient("") would throw.
 export const supabase = createClient(
-  url ?? "http://localhost",
-  anonKey ?? "public-anon-key",
+  url || "http://localhost",
+  anonKey || "public-anon-key",
 );

@@ -1,15 +1,16 @@
 import { useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { AccountMenu } from "./components/AccountMenu";
+import { Settings } from "./components/Settings";
 import { SetPassword } from "./components/SetPassword";
 import { GroupSwitcher } from "./components/GroupSwitcher";
 import { MobileMenu } from "./components/MobileMenu";
 import { GroupMembers } from "./components/GroupMembers";
 import { GroupComparisonTable } from "./components/GroupComparisonTable";
 import { GenreChart } from "./components/GenreChart";
+import { GenreFilms } from "./components/GenreFilms";
 import { RatingHistogram } from "./components/RatingHistogram";
 import { VsCommunity } from "./components/VsCommunity";
-import { IconMenu, IconUserPlus, IconRefresh } from "./components/icons";
+import { IconMenu, IconUserPlus } from "./components/icons";
 import { DirectorsTable } from "./components/DirectorsTable";
 import { PeopleTable } from "./components/PeopleTable";
 import { WatchlistActuary } from "./components/WatchlistActuary";
@@ -17,7 +18,7 @@ import { Wrapped } from "./components/Wrapped";
 import { ActivityCharts } from "./components/ActivityCharts";
 import { Heatmap } from "./components/Heatmap";
 import { Section } from "./components/Section";
-import type { Activity, Core, Enriched, EnrichedWatchlist, Profile, Ratings, Watchlist } from "./types";
+import type { Activity, Core, Enriched, EnrichedWatchlist, GenreFilm, Profile, Ratings, Watchlist } from "./types";
 import { StatCard, withUnit } from "./components/StatCard";
 import type { FilmComparison, Group, GroupStats, RosterMember } from "./groups";
 
@@ -173,9 +174,20 @@ const MOCK_ACTIVITY = {
   })(),
 } as unknown as Activity;
 
+// Per-film list backing the genre-bubble drill-down. A couple share Drama so the
+// click-through list has more than one row, with mixed dates/ratings to check sorting.
+const MOCK_GENRE_FILMS: GenreFilm[] = [
+  { title: "Parasite", year: 2019, genres: ["Drama", "Thriller", "Comedy"], rating: 4.5, last_watched: "2025-11-02", poster_path: null },
+  { title: "Whiplash", year: 2014, genres: ["Drama", "Music"], rating: 5.0, last_watched: "2025-08-17", poster_path: null },
+  { title: "Marriage Story", year: 2019, genres: ["Drama", "Romance"], rating: 4.0, last_watched: "2024-12-30", poster_path: null },
+  { title: "Aftersun", year: 2022, genres: ["Drama"], rating: null, last_watched: null, poster_path: null },
+  { title: "Mad Max: Fury Road", year: 2015, genres: ["Action", "Adventure", "Science Fiction"], rating: 4.5, last_watched: "2025-06-01", poster_path: null },
+];
+
 export function Harness() {
   const [group, setGroup] = useState<Group | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [genreSel, setGenreSel] = useState<string | null>(null);
 
   return (
     <div className="app" style={{ paddingTop: 40 }}>
@@ -188,8 +200,7 @@ export function Harness() {
           <span className="who">you@example.com</span>
           <GroupSwitcher selected={group} onSelect={setGroup} />
           <button className="secondary icon-btn" aria-label="Invite a friend"><IconUserPlus /> <span className="btn-label">Invite a friend</span></button>
-          <button className="secondary icon-btn" aria-label="Refresh stats"><IconRefresh /> <span className="btn-label">Refresh stats</span></button>
-          <AccountMenu session={MOCK_SESSION} />
+          <Settings session={MOCK_SESSION} canRefresh onReuploaded={() => {}} />
         </div>
         {menuOpen && (
           <MobileMenu
@@ -206,6 +217,16 @@ export function Harness() {
 
       <Section title="Ratings (histogram + themed tooltip)">
         <RatingHistogram ratings={MOCK_RATINGS} />
+      </Section>
+
+      <Section title="RSS sync toggle (switch)">
+        <div className="rss-sync" style={{ maxWidth: 360 }}>
+          <label className="rss-toggle">
+            <input type="checkbox" defaultChecked />
+            <span>Auto-sync new diary entries daily</span>
+          </label>
+          <p className="hint">Requires a <strong>public</strong> Letterboxd profile.</p>
+        </div>
       </Section>
 
       <Section title="Stat cards — unit formatting">
@@ -273,6 +294,12 @@ export function Harness() {
 
       <Section title="Group genres">
         <GenreChart genres={MOCK_STATS.genres} />
+      </Section>
+      <Section title="Genre drill-down (click a bubble)">
+        <div className="genre-layout">
+          <GenreChart genres={MOCK_STATS.genres} onSelectGenre={setGenreSel} selected={genreSel} />
+          <GenreFilms genre={genreSel} films={MOCK_GENRE_FILMS} onClose={() => setGenreSel(null)} />
+        </div>
       </Section>
       <Section title="Group directors">
         <DirectorsTable directors={MOCK_STATS.directors} />

@@ -85,6 +85,17 @@ export function Upload({ onComplete }: { onComplete: () => void }) {
   return (
     <div className="panel upload">
       <p>Upload your Letterboxd export ZIP (Settings → Data → Export your data on Letterboxd).</p>
+      {/* Shortcut straight to Letterboxd's Settings → Data tab (where "Export your data"
+          lives) so users don't have to hunt for it. Opens in a new tab (noopener) so they
+          keep this page; it prompts a Letterboxd sign-in if needed. */}
+      <a
+        className="secondary export-link"
+        href="https://letterboxd.com/settings/data/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Get your export from Letterboxd ↗
+      </a>
       <input
         ref={inputRef}
         type="file"

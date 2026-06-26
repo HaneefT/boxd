@@ -12,10 +12,10 @@ import { GroupSwitcher } from "./components/GroupSwitcher";
 import { GroupInvite } from "./components/GroupInvite";
 import { Upload } from "./components/Upload";
 import { Dashboard } from "./components/Dashboard";
-import { AccountMenu } from "./components/AccountMenu";
+import { Settings } from "./components/Settings";
 import { SetPassword } from "./components/SetPassword";
 import { MobileMenu } from "./components/MobileMenu";
-import { IconMenu, IconRefresh } from "./components/icons";
+import { IconMenu } from "./components/icons";
 
 export function App() {
   const { session, loading: authLoading } = useSession();
@@ -30,9 +30,6 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
-  // Re-upload a fresh export to recompute the snapshot (DESIGN §2.4 — "fresh stats =
-  // re-upload"). The raw ZIP is deleted after parsing, so there's nothing to reprocess.
-  const [reuploading, setReuploading] = useState(false);
   // Mobile: the appbar controls collapse behind a hamburger (MobileMenu).
   const [menuOpen, setMenuOpen] = useState(false);
   // A fresh token from the URL, or one stashed before a sign-in redirect (which
@@ -123,12 +120,7 @@ export function App() {
             <span className="who">{session?.user.email}</span>
             <GroupSwitcher selected={group} onSelect={setGroup} />
             {isOwner && <InviteFriend />}
-            {snap && (
-              <button className="secondary icon-btn" aria-label="Refresh stats" onClick={() => setReuploading((r) => !r)}>
-                <IconRefresh /> <span className="btn-label">Refresh stats</span>
-              </button>
-            )}
-            {session && <AccountMenu session={session} />}
+            {session && <Settings session={session} canRefresh={!!snap} onReuploaded={reload} />}
           </div>
           {menuOpen && session && (
             <MobileMenu
@@ -159,27 +151,7 @@ export function App() {
       )}
 
       {snap ? (
-        <>
-          {reuploading && (
-            <div className="panel notice" style={{ marginBottom: 16 }}>
-              <div className="group-head">
-                <span className="sub">
-                  Download a fresh export from Letterboxd and upload it to recompute your stats.
-                </span>
-                <button className="secondary" onClick={() => setReuploading(false)}>
-                  Cancel
-                </button>
-              </div>
-              <Upload
-                onComplete={() => {
-                  setReuploading(false);
-                  reload();
-                }}
-              />
-            </div>
-          )}
-          <Dashboard snap={snap} group={group} myId={session?.user.id ?? null} />
-        </>
+        <Dashboard snap={snap} group={group} myId={session?.user.id ?? null} />
       ) : (
         <div className="empty">
           <h1>Boxd Stats</h1>

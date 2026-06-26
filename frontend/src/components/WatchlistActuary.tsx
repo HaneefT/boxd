@@ -76,7 +76,7 @@ export function WatchlistActuary({
       <div className="wl-col-head">
         <span className="dot blue"></span>
         <h4>Your list over time</h4>
-        <p>What just joined, and what's languished longest</p>
+        <p>What just joined, and what's collecting dust</p>
       </div>
       <div className="wl-boxes">
         {newest && (

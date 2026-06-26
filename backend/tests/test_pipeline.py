@@ -517,6 +517,199 @@ def test_watchlist_velocity_never_clears():
     assert v["months_to_clear"] is None and v["projected_clear"] is None
 
 
+def test_rss_parse():
+    """Letterboxd diary RSS maps to Watch rows with tmdb_id from <tmdb:movieId>; unrated
+    entries get rating None, the auto 'Watched on…' description isn't stored as a review,
+    and non-diary items (no watchedDate) are skipped."""
+    from datetime import date  # noqa: PLC0415
+    from process_upload.rss import parse_rss  # noqa: PLC0415
+
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:letterboxd="https://letterboxd.com" xmlns:tmdb="https://themoviedb.org">
+  <channel>
+    <item>
+      <title>Marty Supreme, 2025 - ★★★★</title>
+      <link>https://letterboxd.com/artemisf24/film/marty-supreme/</link>
+      <letterboxd:watchedDate>2025-01-10</letterboxd:watchedDate>
+      <letterboxd:rewatch>No</letterboxd:rewatch>
+      <letterboxd:filmTitle>Marty Supreme</letterboxd:filmTitle>
+      <letterboxd:filmYear>2025</letterboxd:filmYear>
+      <letterboxd:memberRating>4.0</letterboxd:memberRating>
+      <tmdb:movieId>1317288</tmdb:movieId>
+      <description><![CDATA[ <p><img src="https://a.ltrbxd.com/x.jpg"/></p> <p>a lot more polished than good time</p> ]]></description>
+    </item>
+    <item>
+      <title>It Ends, 2025</title>
+      <link>https://letterboxd.com/artemisf24/film/it-ends/</link>
+      <letterboxd:watchedDate>2025-12-18</letterboxd:watchedDate>
+      <letterboxd:rewatch>No</letterboxd:rewatch>
+      <letterboxd:filmTitle>It Ends</letterboxd:filmTitle>
+      <letterboxd:filmYear>2025</letterboxd:filmYear>
+      <tmdb:movieId>1422011</tmdb:movieId>
+      <description><![CDATA[ <p><img src="https://a.ltrbxd.com/y.jpg"/></p> <p>Watched on Thursday December 18, 2025.</p> ]]></description>
+    </item>
+    <item>
+      <title>Se7en, 1995 - rewatch</title>
+      <link>https://letterboxd.com/artemisf24/film/se7en/1/</link>
+      <letterboxd:watchedDate>2025-12-24</letterboxd:watchedDate>
+      <letterboxd:rewatch>Yes</letterboxd:rewatch>
+      <letterboxd:filmTitle>Se7en</letterboxd:filmTitle>
+      <letterboxd:filmYear>1995</letterboxd:filmYear>
+      <letterboxd:memberRating>4.5</letterboxd:memberRating>
+      <tmdb:movieId>807</tmdb:movieId>
+      <description><![CDATA[ <p>Watched on Wednesday December 24, 2025.</p> ]]></description>
+    </item>
+    <item>
+      <title>My favourite films</title>
+      <link>https://letterboxd.com/artemisf24/list/my-list/</link>
+      <description>a list, no watchedDate</description>
+    </item>
+  </channel>
+</rss>"""
+    ws = parse_rss(xml)
+    assert len(ws) == 3  # the list item (no watchedDate) is skipped
+    marty, itends, se7en = ws
+    assert marty.title == "Marty Supreme" and marty.year == 2025
+    assert marty.tmdb_id == 1317288 and marty.rating == 4.0
+    assert marty.watched_at == date(2025, 1, 10)
+    assert marty.review_text == "a lot more polished than good time"
+    assert itends.rating is None            # unrated -> None
+    assert itends.review_text is None       # auto "Watched on …" stub dropped
+    assert itends.tmdb_id == 1422011
+    assert se7en.is_rewatch is True and se7en.rating == 4.5 and se7en.tmdb_id == 807
+
+
+def test_rss_sync_user_appends_and_recomputes():
+    """sync_user dedups against existing watches by (tmdb_id, watched_date), appends only
+    the genuinely new entry, recomputes the snapshot over the union, and preserves the
+    profile section (which isn't stored as columns)."""
+    from process_upload.rss_sync import sync_user  # noqa: PLC0415
+    from process_upload.enricher import InMemoryFilmCache  # noqa: PLC0415
+
+    rss = """<?xml version="1.0"?>
+<rss xmlns:letterboxd="https://letterboxd.com" xmlns:tmdb="https://themoviedb.org"><channel>
+  <item><link>u/heat</link><letterboxd:watchedDate>2024-01-01</letterboxd:watchedDate>
+    <letterboxd:filmTitle>Heat</letterboxd:filmTitle><letterboxd:filmYear>1995</letterboxd:filmYear>
+    <letterboxd:memberRating>4.0</letterboxd:memberRating><tmdb:movieId>100</tmdb:movieId>
+    <description>Watched on Monday.</description></item>
+  <item><link>u/se7en</link><letterboxd:watchedDate>2025-12-24</letterboxd:watchedDate>
+    <letterboxd:filmTitle>Se7en</letterboxd:filmTitle><letterboxd:filmYear>1995</letterboxd:filmYear>
+    <letterboxd:memberRating>4.5</letterboxd:memberRating><tmdb:movieId>807</tmdb:movieId>
+    <description>great</description></item>
+</channel></rss>"""
+    films_table = {
+        100: {"tmdb_id": 100, "title": "Heat", "year": 1995, "runtime": 170, "genres": ["Crime"], "vote_average": 7.9},
+        807: {"tmdb_id": 807, "title": "Se7en", "year": 1995, "runtime": 127, "genres": ["Crime"], "vote_average": 8.3},
+    }
+
+    class FakeWriter:
+        def __init__(self):
+            self.inserted: dict = {}
+            self.upserts: dict = {}
+
+        def select(self, path):
+            if path.startswith("/watches"):
+                return [{"tmdb_id": 100, "title": "Heat", "year": 1995, "lb_uri": "csv/heat",
+                         "watched_at": "2024-01-01", "rating": 4.0, "is_rewatch": False,
+                         "review_text": None, "tags": None}]
+            if path.startswith("/watchlist"):
+                return []
+            if path.startswith("/films"):
+                ids = [int(x) for x in path.split("in.(")[1].split(")")[0].split(",")]
+                return [films_table[i] for i in ids if i in films_table]
+            if path.startswith("/stat_snapshots"):
+                return [{"payload": {"profile": {"username": "artemis", "date_joined": "2023-02-21", "favorite_films": []}}}]
+            return []
+
+        def insert(self, table, rows):
+            self.inserted.setdefault(table, []).extend(rows)
+
+        def upsert(self, table, rows):
+            self.upserts.setdefault(table, []).extend(rows)
+
+    class StubClient:
+        def movie_details(self, tid):
+            return films_table[tid]
+
+    writer = FakeWriter()
+    n = sync_user("u1", "artemisf24", writer=writer, client=StubClient(),
+                  cache=InMemoryFilmCache(), fetch=lambda _: rss)
+
+    assert n == 1  # Heat is a dup (same tmdb_id + watched_date); only Se7en is new
+    inserted = writer.inserted["watches"]
+    assert len(inserted) == 1 and inserted[0]["tmdb_id"] == 807
+    snap = writer.upserts["stat_snapshots"][0]["payload"]
+    assert snap["core"]["totals"]["unique_films"] == 2          # Heat + Se7en
+    assert snap["profile"]["username"] == "artemis"            # preserved from prior snapshot
+
+
+def test_rss_sync_user_preserves_watchlist_enrichment():
+    """Regression: an RSS recompute must keep the watchlist actuary (Movie night picks /
+    Address the elephant). Those read watchlist films' runtimes from `films`, so sync_user
+    has to fetch films for watchlist titles too — not just watched ones. Fetching watches
+    only left a watchlist-only film absent, _watchlist_enriched returned None, and the whole
+    section silently vanished from the snapshot."""
+    from process_upload.rss_sync import sync_user  # noqa: PLC0415
+    from process_upload.enricher import InMemoryFilmCache  # noqa: PLC0415
+
+    rss = """<?xml version="1.0"?>
+<rss xmlns:letterboxd="https://letterboxd.com" xmlns:tmdb="https://themoviedb.org"><channel>
+  <item><link>u/se7en</link><letterboxd:watchedDate>2025-12-24</letterboxd:watchedDate>
+    <letterboxd:filmTitle>Se7en</letterboxd:filmTitle><letterboxd:filmYear>1995</letterboxd:filmYear>
+    <letterboxd:memberRating>4.5</letterboxd:memberRating><tmdb:movieId>807</tmdb:movieId>
+    <description>great</description></item>
+</channel></rss>"""
+    films_table = {
+        100: {"tmdb_id": 100, "title": "Heat", "year": 1995, "runtime": 170, "genres": ["Crime"], "vote_average": 7.9},
+        807: {"tmdb_id": 807, "title": "Se7en", "year": 1995, "runtime": 127, "genres": ["Crime"], "vote_average": 8.3},
+        # Watchlist-ONLY film (never watched) — only reachable if sync_user fetches
+        # films for watchlist ids. A short runtime so it's the "Movie night picks" pick.
+        999: {"tmdb_id": 999, "title": "Tenet", "year": 2020, "runtime": 90, "genres": ["Action"], "vote_average": 7.3},
+    }
+    fetched_film_ids: list[int] = []
+
+    class FakeWriter:
+        def __init__(self):
+            self.upserts: dict = {}
+
+        def select(self, path):
+            if path.startswith("/watches"):
+                return [{"tmdb_id": 100, "title": "Heat", "year": 1995, "lb_uri": "csv/heat",
+                         "watched_at": "2024-01-01", "rating": 4.0, "is_rewatch": False,
+                         "review_text": None, "tags": None}]
+            if path.startswith("/watchlist"):
+                return [{"tmdb_id": 999, "title": "Tenet", "year": 2020,
+                         "lb_uri": "u/tenet", "added_at": "2021-01-01"}]
+            if path.startswith("/films"):
+                ids = [int(x) for x in path.split("in.(")[1].split(")")[0].split(",")]
+                fetched_film_ids.extend(ids)
+                return [films_table[i] for i in ids if i in films_table]
+            if path.startswith("/stat_snapshots"):
+                return [{"payload": {"profile": {"username": "artemis", "date_joined": None, "favorite_films": []}}}]
+            return []
+
+        def insert(self, table, rows):
+            pass
+
+        def upsert(self, table, rows):
+            self.upserts.setdefault(table, []).extend(rows)
+
+    class StubClient:
+        def movie_details(self, tid):
+            return films_table[tid]
+
+    writer = FakeWriter()
+    sync_user("u1", "artemisf24", writer=writer, client=StubClient(),
+              cache=InMemoryFilmCache(), fetch=lambda _: rss)
+
+    assert 999 in fetched_film_ids  # the watchlist-only film's metadata was fetched
+    snap = writer.upserts["stat_snapshots"][0]["payload"]
+    ewl = snap["watchlist_enriched"]
+    assert ewl is not None, "RSS recompute dropped the watchlist actuary"
+    assert ewl["longest"] is not None
+    assert any(f["title"] == "Tenet" for f in ewl["shortest"])  # the quick win survived
+
+
 def _run_all():
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

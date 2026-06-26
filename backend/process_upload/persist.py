@@ -131,6 +131,23 @@ class SupabaseWriter:
                       headers={"Prefer": "return=minimal"})
         self._insert_chunked(table, rows)
 
+    def insert(self, table: str, rows: list[dict]) -> None:
+        """Append rows (no delete) — used by the RSS poller's incremental sync."""
+        self._insert_chunked(table, rows)
+
+    def select(self, path: str) -> list[dict]:
+        """GET a PostgREST query path (e.g. "/watches?user_id=eq.X&select=*") and return
+        the parsed rows. Read counterpart to _request (which discards the body)."""
+        req = urllib.request.Request(self.base + path, method="GET", headers=self._headers())
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            raise SupabaseWriteError(f"Supabase {e.code} on GET {path}: {detail}") from e
+        except urllib.error.URLError as e:
+            raise SupabaseWriteError(f"Supabase network error on GET {path}: {e}") from e
+
     def upsert(self, table: str, rows: list[dict]) -> None:
         self._insert_chunked(table, rows,
                              prefer="resolution=merge-duplicates,return=minimal")

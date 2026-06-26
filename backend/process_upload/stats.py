@@ -378,6 +378,32 @@ def _enriched_stats(watches: list[Watch], films: dict[int, dict]) -> Optional[di
         actor_films.items(), key=lambda kv: len(kv[1]), reverse=True
     )[:15]
 
+    # Per-film list powering the "click a genre bubble → films in that genre" drill-down.
+    # One row per unique film (the `unique` representative), carrying its genres so the
+    # frontend can filter by any genre client-side, plus the most-recent watch date
+    # (max over all viewings, not the representative's) so the list sorts recency-first.
+    last_watched_by_key: dict[str, date] = {}
+    for w in matched:
+        if w.watched_at:
+            k = _film_key(w)
+            cur = last_watched_by_key.get(k)
+            if cur is None or w.watched_at > cur:
+                last_watched_by_key[k] = w.watched_at
+    films_list = []
+    for w in unique:
+        f = films[w.tmdb_id]
+        if not (f.get("genres")):  # no genres → can't appear under any bubble
+            continue
+        last = last_watched_by_key.get(_film_key(w))
+        films_list.append({
+            "title": w.title,
+            "year": f.get("year") or w.year,
+            "genres": f.get("genres") or [],
+            "rating": w.rating,
+            "last_watched": last.isoformat() if last else None,
+            "poster_path": f.get("poster_path"),
+        })
+
     return {
         "matched_films": len(unique),
         "runtime": {
@@ -390,6 +416,7 @@ def _enriched_stats(watches: list[Watch], films: dict[int, dict]) -> Optional[di
         },
         "genres": dict(genres.most_common()),
         "genre_by_year": {str(y): dict(c) for y, c in sorted(genre_by_year.items())},
+        "films": films_list,
         "countries": dict(countries.most_common(25)),
         "languages": dict(languages.most_common(25)),
         "top_directors": [

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import type { Snapshot } from "../types";
 import type { Group } from "../groups";
 import { Section } from "./Section";
 import { Totals } from "./Totals";
 import { RatingHistogram } from "./RatingHistogram";
 import { GenreChart } from "./GenreChart";
+import { GenreFilms } from "./GenreFilms";
 import { ActivityCharts } from "./ActivityCharts";
 import { Heatmap } from "./Heatmap";
 import { Wrapped, completedYears } from "./Wrapped";
@@ -31,6 +33,12 @@ export function Dashboard({
   const { profile, core, enriched } = snap;
   const era = core.era;
   const big = core.activity.biggest_day;
+
+  // Genre-bubble drill-down: a clicked genre opens the per-film list. Only wired when
+  // the snapshot carries the per-film list (enriched.films) — older snapshots leave the
+  // bubbles display-only until a re-upload regenerates them.
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const genreFilms = enriched?.films ?? null;
 
   return (
     <>
@@ -88,7 +96,24 @@ export function Dashboard({
       {enriched ? (
         <>
           <Section title="Genres">
-            <GenreChart genres={enriched.genres} />
+            {/* When the snapshot has the per-film list, show the chart + an always-present
+                film panel side by side; otherwise (older snapshot) just the chart. */}
+            {genreFilms?.length ? (
+              <div className="genre-layout">
+                <GenreChart
+                  genres={enriched.genres}
+                  onSelectGenre={setSelectedGenre}
+                  selected={selectedGenre}
+                />
+                <GenreFilms
+                  genre={selectedGenre}
+                  films={genreFilms}
+                  onClose={() => setSelectedGenre(null)}
+                />
+              </div>
+            ) : (
+              <GenreChart genres={enriched.genres} />
+            )}
           </Section>
 
           <Section title="Directors">

@@ -11,7 +11,22 @@ type GNode = { genre?: string; count?: number; children?: GNode[] };
 const W = 520;
 const H = 420;
 
-export function GenreChart({ genres, top = 14 }: { genres: Record<string, number>; top?: number }) {
+export function GenreChart({
+  genres,
+  top = 14,
+  onSelectGenre,
+  selected = null,
+}: {
+  genres: Record<string, number>;
+  top?: number;
+  // When set, bubbles become clickable and call back with the genre — the solo
+  // dashboard uses this to open the per-genre film list. Omitted in group view
+  // (group_stats is a rollup with no per-film data), where the chart stays display-only.
+  onSelectGenre?: (genre: string) => void;
+  // The currently-open genre, kept lit even when not hovering so it's clear which
+  // list the adjacent panel is showing.
+  selected?: string | null;
+}) {
   // The pack layout depends only on the data, not on hover state — memoise it so
   // hovering (which re-renders) doesn't recompute the whole circle-packing each time.
   const { data, root, max } = useMemo(() => {
@@ -30,10 +45,13 @@ export function GenreChart({ genres, top = 14 }: { genres: Record<string, number
 
   if (!root) return <div className="panel">No genre data.</div>;
 
-  // Render the hovered bubble last so its pop isn't clipped by neighbours (cheap — a
+  // Hover wins, but the selected genre stays emphasised when the cursor is away so the
+  // chart and the adjacent film list agree on what's active.
+  const emphasis = hovered ?? selected;
+  // Render the emphasised bubble last so its pop isn't clipped by neighbours (cheap — a
   // tree walk, not a re-layout).
-  const leaves = root.leaves().sort((a, b) => Number(a.data.genre === hovered) - Number(b.data.genre === hovered));
-  const active = data.find((d) => d.genre === hovered) ?? data[0];
+  const leaves = root.leaves().sort((a, b) => Number(a.data.genre === emphasis) - Number(b.data.genre === emphasis));
+  const active = data.find((d) => d.genre === emphasis) ?? data[0];
 
   return (
     <div className="panel">
@@ -45,7 +63,7 @@ export function GenreChart({ genres, top = 14 }: { genres: Record<string, number
         {/* Clear only when the cursor leaves the whole chart — not on every bubble exit
             — so moving bubble-to-bubble hands the highlight over without flashing back
             through the all-blue neutral state in the gaps between circles. */}
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", height: "auto" }}
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}
              role="img" aria-label="Genre distribution" onMouseLeave={() => setHovered(null)}>
           {leaves.map((leaf) => {
             const genre = leaf.data.genre ?? "";
@@ -54,8 +72,8 @@ export function GenreChart({ genres, top = 14 }: { genres: Record<string, number
             const r = leaf.r;
             const fs = Math.max(9, Math.min(15, r / 2.6));
             const labelFits = r >= 22 && label.length * fs * 0.55 <= r * 1.8;
-            const isHover = genre === hovered;
-            const dim = hovered != null && !isHover;
+            const isHover = genre === emphasis;
+            const dim = emphasis != null && !isHover;
             const base = 0.25 + 0.55 * (count / max);
             return (
               <g
@@ -63,7 +81,8 @@ export function GenreChart({ genres, top = 14 }: { genres: Record<string, number
                 data-genre={genre}
                 transform={`translate(${leaf.x},${leaf.y}) scale(${isHover ? 1.06 : 1})`}
                 onMouseEnter={() => setHovered(genre)}
-                style={{ cursor: "pointer", transition: "transform 0.12s ease" }}
+                onClick={onSelectGenre ? () => onSelectGenre(genre) : undefined}
+                style={{ cursor: onSelectGenre ? "pointer" : "default", transition: "transform 0.12s ease" }}
               >
                 <circle
                   r={r}

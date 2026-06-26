@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { createGroup, listMyGroups, type Group } from "../groups";
 import { supabase } from "../supabase";
 import { SetPassword } from "./SetPassword";
+import { RssSync } from "./RssSync";
 import { Upload } from "./Upload";
 import { IconChevron, IconRefresh, IconUser, IconUserPlus, IconUsers } from "./icons";
 
@@ -83,6 +84,7 @@ export function MobileMenu({
                   {r.key === "account" && (
                     <>
                       <SetPassword hasPassword={session.user.user_metadata?.has_password === true} />
+                      <RssSync session={session} />
                       <button className="secondary mm-signout" onClick={() => supabase.auth.signOut()}>
                         Sign out
                       </button>
